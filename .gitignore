@@ -43,3 +43,6 @@ app.*.map.json
 **/ios/Flutter/flutter_export_environment.sh
 **/ios/**/Pods/
 **/ios/Podfile.lock
+
+# Claude Code (personal, machine-local — shared config stays in settings.json)
+.claude/settings.local.json

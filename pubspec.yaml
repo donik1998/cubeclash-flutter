@@ -1,0 +1,65 @@
+name: cubeclash
+description: "CubeClash — competitive speedcubing app: solo WCA timer + live 1v1 races. Primary Flutter client."
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+# NOTE: version constraints are intentionally conservative so `flutter pub get`
+# resolves widely. After the first `flutter pub get`, run
+# `flutter pub upgrade --major-versions` to pull the latest compatible set.
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # State management — BLoC / Cubit
+  flutter_bloc: ^8.1.6
+  equatable: ^2.0.7
+
+  # Dependency injection (manual get_it now; upgrade to injectable codegen later)
+  get_it: ^8.0.3
+
+  # Routing — StatefulShellRoute, 4-tab shell
+  go_router: ^14.6.2
+
+  # Networking — Dio + JWT interceptor (contract: docs/API Design)
+  dio: ^5.7.0
+
+  # Real-time races — Socket.IO (protocol: docs/Real-time Race Protocol)
+  socket_io_client: ^2.0.3
+
+  # Typography — Noto Serif (design system)
+  google_fonts: ^6.2.1
+
+  # --- Added as the data / sync / analytics layers land -----------------------
+  # Uncomment per layer so the initial build stays green with zero native config.
+  #
+  # Offline-first local store (docs/Offline Sync):
+  #   connectivity_plus: ^6.1.0
+  #   drift: ^2.21.0
+  #   sqlite3_flutter_libs: ^0.5.26
+  #   path_provider: ^2.1.5
+  #   path: ^1.9.0
+  #
+  # Analytics + crash reporting (docs/Observability & Analytics):
+  #   posthog_flutter: ^4.10.0
+  #   firebase_core: ^3.8.0
+  #   firebase_crashlytics: ^4.1.5   # run `flutterfire configure` first
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  bloc_test: ^9.1.7
+  mocktail: ^1.0.4
+
+  # Code generation (drift / injectable / freezed) — enable when those land:
+  #   build_runner: ^2.4.13
+  #   drift_dev: ^2.21.0
+
+flutter:
+  uses-material-design: true
+  # assets:
+  #   - assets/

@@ -1,0 +1,104 @@
+# CubeClash — Flutter Client (project memory)
+
+Guidance for Claude Code working in this repo. This is the **primary client**
+(`cubeclash-flutter`) of the CubeClash system. Full specs live in the Obsidian
+vault (**Path to Big Tech → CubeClash**). Keep this file in sync as the app grows.
+
+## What this is
+
+CubeClash: a competitive speedcubing app — solo WCA timer + live 1v1 races +
+stats/leaderboards. Portfolio centerpiece to prove **backend + real-time systems
+depth**, not just Flutter delivery. One of four repos:
+
+- `cubeclash-backend` — TypeScript · NestJS · PostgreSQL/Prisma · Redis · Socket.IO (source of truth; built first)
+- `cubeclash-flutter` — **this repo** (primary client, v1)
+- `cubeclash-ios` / `cubeclash-android` — native v2 (build **one** platform, deep)
+
+Same Clean Architecture across every client; same backend contract.
+
+## Architecture — feature-first Clean Architecture
+
+Dependencies point inward: **presentation → domain ← data**.
+
+- `presentation/` — widgets + BLoC/Cubit. Renders state, dispatches events. No business logic.
+- `domain/` — pure Dart: entities, use cases, repository interfaces. **No Flutter/IO imports** (keep it unit-testable).
+- `data/` — repository implementations + data sources (remote: Dio, local: Drift). Maps DTOs ↔ entities.
+
+## Folder map
+
+```
+lib/
+  core/       theme · router · network · realtime · analytics · di · error · widgets
+  features/<feature>/  presentation · domain · data
+  app.dart · main.dart
+```
+
+Current state: the **timer** feature has real domain code (`Solve`, `Penalty`,
+`ComputeAverages`); **race/stats/profile** are themed placeholders wired into the
+4-tab shell. Backend access is stubbed (`DioClient`, `RaceGateway`, `TokenStore`)
+— no live calls yet.
+
+## Conventions
+
+- Package name is `cubeclash` → import `package:cubeclash/...`.
+- **State:** flutter_bloc — Cubit for simple screens, Bloc for the timer/race state machines.
+- **DI:** get_it, wired manually in `core/di/injection.dart`. Upgrade to injectable codegen later.
+- **Routing:** go_router `StatefulShellRoute` (4-tab shell) in `core/router`. Immersive flows (running solve, live race) become full-screen routes outside the shell.
+- **Networking:** Dio + `AuthInterceptor` (JWT attach + refresh-on-401). Base URL via `--dart-define=API_BASE_URL`. REST base is `/v1`, fields are `snake_case`.
+- **Real-time:** `RaceGateway` wraps socket_io_client on the `/race` namespace and exposes typed streams; the Race Bloc subscribes.
+- **Theming:** design tokens in `core/theme` (`AppColors` light/dark, `AppSpacing`, `AppRadius`). Read via `context.colors`. Noto Serif via google_fonts. **Never hardcode colors/spacing — use tokens.**
+- **Offline:** the Solves repository is local-first (Drift); reconcile via `POST /sync` (last-write-wins by `updated_at` + `client_id`). Not built yet.
+- **Analytics:** `AnalyticsService` (no-op default). Authoritative events fire server-side; UI events client-side.
+
+## Design tokens (source: Obsidian → Design System)
+
+Brand blue `#2E6BFF` (light) / `#4C82FF` (dark); WCA cube colors constant across
+themes; Noto Serif throughout. Spacing 4–64, radius sm8/md12/lg16/xl20/pill.
+Active nav tab = `brand/primary-soft` pill. Signature nav motion is **Variant C**
+(pinch-squeeze + directional icon tilt) — TODO in `ScaffoldWithNavBar`.
+
+## Backend contract (see `cubeclash-backend`, Obsidian API Design + Real-time Race Protocol)
+
+- **REST:** `/auth/*`, `/me`, `/solves`, `/sync`, `/scramble`, `/leaderboard`, `/races`. JWT (~15m access + ~30d refresh, rotation). Error shape `{ error: { code, message, details } }`. Cursor pagination.
+- **WS (`/race`):** client → `race:create|join|ready`, `solve:start|stop`; server → `race:state|countdown|scramble|opponent_progress|result`. Server-authoritative; room state in Redis.
+
+## Commands
+
+- Install: `flutter pub get`
+- Run: `flutter run --dart-define=API_BASE_URL=http://localhost:3000`
+- Format: `dart format .`
+- Analyze: `flutter analyze`
+- Test: `flutter test`
+- Quality gate (matches CI): `dart format --output=none --set-exit-if-changed . && flutter analyze && flutter test`
+
+## Getting started — generate native platform folders
+
+This scaffold intentionally ships without `android/`, `ios/`, etc. Generate them
+with your local SDK (this does **not** overwrite existing files):
+
+```
+flutter create --project-name cubeclash --org com.donik1998 --platforms android,ios .
+flutter pub get
+dart format .
+flutter run
+```
+
+## Repo tooling — `.claude/`
+
+Claude Code configuration for this repo:
+
+- **`settings.json`** — *shared, committed.* Baseline anyone working in the repo inherits (currently: allow `flutter` / `dart` commands).
+- **`settings.local.json`** — *personal, git-ignored.* Your machine-local permission scope — an allow / ask / deny list that lets the agent run project dev commands (flutter, dart, git, common shell tools) and edit files **without a prompt each time, bounded to this project**. Consequential actions (`git push`, `gh`) are set to *ask*; destructive ones (`sudo`, `rm -rf`, force-push, `reset --hard`) are *denied*. Widen or tighten it as you like — it never leaves your machine.
+- **`commands/`** — *shared, committed.* Slash commands: `/scaffold-feature`, `/run-checks`.
+
+## Roadmap (post-MVP)
+
+CV camera timer (flagship v1.1, doubles as PvP anti-cheat), full offline sync,
+ranked matchmaking (Elo/Glicko), tournaments, more events, daily challenge,
+native v2, smart-cube (BLE).
+
+## Don'ts
+
+- Don't put business logic in presentation, or Flutter/IO imports in domain.
+- Don't hardcode colors/spacing — use the design tokens.
+- Don't trust client-computed competitive fields (`is_pb`, `elo`, rank) — the server owns them.
