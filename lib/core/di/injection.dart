@@ -1,4 +1,5 @@
 import 'package:get_it/get_it.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../features/timer/data/repositories/fake_solve_repository.dart';
 import '../../features/timer/data/repositories/solve_repository_impl.dart';
@@ -6,6 +7,10 @@ import '../../features/timer/domain/repositories/solve_repository.dart';
 import '../../features/timer/domain/usecases/generate_scramble.dart';
 import '../../features/timer/presentation/bloc/timer_bloc.dart';
 import '../../features/timer/presentation/cubit/history_cubit.dart';
+import '../../features/auth/data/repositories/auth_repository_impl.dart';
+import '../../features/auth/data/repositories/fake_auth_repository.dart';
+import '../../features/auth/domain/repositories/auth_repository.dart';
+import '../../features/auth/presentation/cubit/auth_cubit.dart';
 import '../../features/profile/data/repositories/fake_profile_repository.dart';
 import '../../features/profile/data/repositories/profile_repository_impl.dart';
 import '../../features/profile/data/repositories/settings_repository_impl.dart';
@@ -24,7 +29,9 @@ import '../../features/timer/presentation/cubit/solve_detail_cubit.dart';
 import '../analytics/analytics_service.dart';
 import '../network/auth_interceptor.dart';
 import '../network/dio_client.dart';
+import '../network/token_storage.dart';
 import '../realtime/race_gateway.dart';
+import '../router/app_router.dart';
 import '../router/immersive_controller.dart';
 import '../util/ticker.dart';
 
@@ -53,7 +60,12 @@ const bool kUseFakeData = bool.fromEnvironment(
 Future<void> configureDependencies() async {
   // --- Core ------------------------------------------------------------------
   sl
-    ..registerLazySingleton<TokenStore>(TokenStore.new)
+    // Real tokens go to the Keychain / Keystore; the fake-data build has no
+    // session worth protecting and no platform channel in tests.
+    ..registerLazySingleton<TokenStorage>(
+      () => kUseFakeData ? InMemoryTokenStorage() : const SecureTokenStorage(),
+    )
+    ..registerLazySingleton<TokenStore>(() => TokenStore(sl<TokenStorage>()))
     ..registerLazySingleton<DioClient>(() => DioClient(sl<TokenStore>()))
     // The race is the one feature a static fake can't cover — it's a
     // conversation over time — so the fake is a scripted gateway that emits the
@@ -63,7 +75,12 @@ Future<void> configureDependencies() async {
     )
     ..registerLazySingleton<AnalyticsService>(() => const NoopAnalytics())
     ..registerLazySingleton<Ticker>(() => const RealTicker())
-    ..registerLazySingleton<ImmersiveController>(ImmersiveController.new);
+    ..registerLazySingleton<ImmersiveController>(ImmersiveController.new)
+    // The router guards on the TokenStore, so it is built from it here rather
+    // than being a process-wide static that could outlive its store.
+    ..registerLazySingleton<GoRouter>(
+      () => AppRouter.create(sl<TokenStore>()),
+    );
 
   // --- Timer -----------------------------------------------------------------
   sl
@@ -107,6 +124,17 @@ Future<void> configureDependencies() async {
     )
     ..registerFactory<PlayerProfileCubit>(
       () => PlayerProfileCubit(repository: sl<StatsRepository>()),
+    );
+
+  // --- Auth ------------------------------------------------------------------
+  sl
+    ..registerLazySingleton<AuthRepository>(
+      () => kUseFakeData
+          ? FakeAuthRepository(sl<TokenStore>())
+          : AuthRepositoryImpl(sl<DioClient>(), sl<TokenStore>()),
+    )
+    ..registerFactory<AuthCubit>(
+      () => AuthCubit(repository: sl<AuthRepository>()),
     );
 
   // --- Profile / settings ----------------------------------------------------

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
 import 'core/di/injection.dart';
-import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'features/profile/domain/entities/app_settings.dart';
 import 'features/profile/presentation/cubit/settings_cubit.dart';
@@ -33,7 +33,7 @@ class CubeClashApp extends StatelessWidget {
               AppThemeMode.light => ThemeMode.light,
               AppThemeMode.dark => ThemeMode.dark,
             },
-            routerConfig: AppRouter.router,
+            routerConfig: sl<GoRouter>(),
           );
         },
       ),

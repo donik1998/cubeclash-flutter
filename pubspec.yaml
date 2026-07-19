@@ -30,6 +30,7 @@ dependencies:
   # Real-time races — Socket.IO (protocol: docs/Real-time Race Protocol)
   socket_io_client: ^2.0.3
   shared_preferences: ^2.5.5
+  flutter_secure_storage: ^10.3.1
 
   # NOTE: Noto Serif is **bundled** (see `flutter: fonts:` below) rather than
   # pulled at runtime via google_fonts. google_fonts fetches the TTF over the

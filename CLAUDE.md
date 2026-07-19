@@ -53,6 +53,8 @@ Current state (Phases A–B complete):
 - **You feature** — complete. Profile, Settings (persisted via
   shared_preferences; theme is bound to `SettingsCubit` above `MaterialApp`)
   and Friends. `feature_placeholder.dart` is gone — all four tabs are real.
+- **Auth feature** — complete. Welcome → sign up → log in → profile setup,
+  secure token storage, a real refresh-on-401 flow, and a go_router guard.
 
 Backend access is stubbed. Every repository ships a `Fake…` and a real impl;
 `kUseFakeData` in `injection.dart` picks one.
@@ -62,8 +64,9 @@ Backend access is stubbed. Every repository ships a `Fake…` and a real impl;
 - Package name is `cubeclash` → import `package:cubeclash/...`.
 - **State:** flutter_bloc — Cubit for simple screens, Bloc for the timer/race state machines.
 - **DI:** get_it, wired manually in `core/di/injection.dart`. Upgrade to injectable codegen later.
-- **Routing:** go_router `StatefulShellRoute` (4-tab shell) in `core/router`. Immersive flows (running solve, live race) become full-screen routes outside the shell.
-- **Networking:** Dio + `AuthInterceptor` (JWT attach + refresh-on-401). Base URL via `--dart-define=API_BASE_URL`. REST base is `/v1`, fields are `snake_case`.
+- **Routing:** go_router `StatefulShellRoute` (4-tab shell) in `core/router`. The router is **built by DI** (`AppRouter.create(tokens)`), not a static — it captures the `TokenStore` it guards on, so a process-wide instance would outlive its store. A `redirect` guard sends signed-out users to `/auth` and signed-in users out of it; it waits on `TokenStore.isRestored` so a cold start doesn't flash the welcome screen at someone already signed in.
+- **Networking:** Dio + `AuthInterceptor`. Refresh-on-401 is **single-flight** — concurrent 401s share one refresh, because token rotation means a second refresh would present an already-dead token and sign the user out during a recoverable blip. A retry is flagged so its own 401 can't loop. Refresh goes through a *separate* un-intercepted Dio. Base URL via `--dart-define=API_BASE_URL`; REST base `/v1`, `snake_case`.
+- **Tokens** live in `TokenStore` (in memory for synchronous header attach, written through to `flutter_secure_storage`). It is a `ChangeNotifier` — the router's guard redirects off its notifications, which is how a dead session bounces the user out.
 - **Real-time:** `RaceGateway` is an *interface*; `SocketRaceGateway` wraps socket_io_client on `/race`, `FakeRaceGateway` scripts the whole lifecycle (opponent included) so races are demoable with no backend. Both emit identical events in identical order, so `RaceBloc` can't tell them apart. `RaceBloc` is a **singleton** — a race outlives the lobby widget, since Live Race is its own route.
 - **The server owns competitive truth.** The Race bloc never compares two times, picks a winner, or computes an Elo change; it renders `race:result`. Same rule for `is_pb` and leaderboard rank.
 - **Settings** live in `SettingsCubit`, a **singleton provided above `MaterialApp`** (the theme is one of its values) and loaded in `main()` before the first frame so the app never flashes the wrong theme. Every change writes through immediately — no save button. The Timer screen listens and forwards `timerPreferences` to `TimerBloc`.
