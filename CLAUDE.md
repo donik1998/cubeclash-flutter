@@ -37,7 +37,7 @@ test/
   **/goldens/*.png          goldens live next to their test file
 ```
 
-Current state (Phases A–B complete):
+Current state — **all phases (A–G) complete**, 270 tests green:
 
 - **Component library** (`core/widgets`) — built, golden-tested light + dark.
 - **Timer feature** — complete. Local scrambler with move-cancellation rules,
@@ -92,7 +92,16 @@ Backend access is stubbed. Every repository ships a `Fake…` and a real impl;
 Brand blue `#2E6BFF` (light) / `#4C82FF` (dark); WCA cube colors constant across
 themes; Noto Serif throughout. Spacing 4–64, radius sm8/md12/lg16/xl20/pill.
 Active nav tab = `brand/primary-soft` pill. Signature nav motion is **Variant C**
-(pinch-squeeze + directional icon tilt) — TODO in `ScaffoldWithNavBar`.
+(pinch-squeeze + directional icon tilt) — implemented in `ScaffoldWithNavBar`,
+driven from one `AnimationController` per tab change, with a reduce-motion
+fallback.
+
+**Known a11y finding:** `text/muted` is ~2.5:1 on `bg/canvas`, below the 4.5:1
+WCAG AA body threshold, in both themes. The token comes from the design system,
+so it's a design decision to revisit rather than something to patch in code.
+Until it changes, **muted text is decorative only** — it never carries
+information a user needs to operate the app. `test/core/theme/contrast_test.dart`
+encodes this and will tell you to tighten it if the token is ever darkened.
 
 ## Backend contract (see `cubeclash-backend`, Obsidian API Design + Real-time Race Protocol)
 

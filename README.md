@@ -6,11 +6,13 @@ The primary client for **CubeClash**, a competitive speedcubing app: solo WCA ti
 - **Framework:** Flutter · Dart
 - **Architecture:** Clean Architecture, feature-first (presentation → domain → data)
 - **State:** BLoC / Cubit
-- **DI:** get_it + injectable
-- **Routing:** go_router (StatefulShellRoute, 4-tab shell)
-- **Networking:** Dio (JWT interceptor + refresh)
-- **Local store:** Drift / SQLite (offline-first)
+- **DI:** get_it (manual; injectable codegen later)
+- **Routing:** go_router (StatefulShellRoute, 4-tab shell + auth guard)
+- **Networking:** Dio (JWT attach + single-flight refresh-on-401)
+- **Session:** flutter_secure_storage · **Preferences:** shared_preferences
+- **Local store:** Drift / SQLite (offline-first) — fast-follow, not MVP
 - **Real-time:** socket_io_client (live races)
+- **Typography:** Noto Serif, bundled as a variable font
 - **Analytics:** PostHog · **Errors:** Crashlytics
 
 ## Backend
@@ -42,18 +44,49 @@ dart format --output=none --set-exit-if-changed . && flutter analyze && flutter 
 
 ```
 lib/
-  core/      theme · router · network · realtime · analytics · di · error · widgets
-  features/  timer · race · stats · profile   (presentation · domain · data)
+  core/      theme · router · network · realtime · analytics · di · error · util · widgets
+  features/  timer · race · stats · profile · auth   (presentation · domain · data)
   app.dart · main.dart
-test/        unit (WCA averaging) + widget smoke test
+assets/fonts/  Noto Serif (variable)
+test/        unit · bloc · widget · golden (light + dark)
+```
+
+### Running without a backend
+
+`cubeclash-backend` doesn't exist yet, so every feature ships two
+implementations of its repository interface and picks one with a build flag.
+Fake data is the default, so `flutter run` gives a fully working app —
+including races, against a scripted opponent.
+
+```bash
+# demo (default)
+flutter run
+
+# against a live server
+flutter run --dart-define=USE_FAKE_DATA=false \
+            --dart-define=API_BASE_URL=https://api.cubeclash.app
 ```
 
 See `CLAUDE.md` for architecture, conventions, and the backend contract.
 
 ## Status
-🚧 **Scaffolding.** Architecture skeleton + tested WCA averaging in place; the
-timer/race/stats/profile shell runs. Feature logic (timer state machine, race
-flow, offline sync) is next.
+
+✅ **All 19 screens built**, 270 tests green.
+
+| Phase | Scope | State |
+|---|---|---|
+| A | Shared component library + typography tokens | ✅ |
+| B | Timer — local scrambler, `TimerBloc`, 3 screens | ✅ |
+| C | Stats — My Stats, Leaderboards, Player Profile | ✅ |
+| D | Race — `RaceBloc` over the `/race` gateway, 6 screens | ✅ |
+| E | You — Profile, Settings, Friends, persisted prefs | ✅ |
+| F | Auth — 4 screens, secure tokens, refresh, route guard | ✅ |
+| G | Motion (nav Variant C), reduce-motion, a11y, goldens | ✅ |
+
+**Next:** offline sync (Drift + `POST /sync`), then the CV camera timer.
+Everything behind `kUseFakeData` becomes live the moment the backend answers —
+the real repository implementations are already written against the documented
+contract.
 
 ## License
 MIT © 2026 Doniyor Murodkulov
