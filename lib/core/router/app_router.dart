@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/profile/presentation/pages/profile_page.dart';
+import '../../features/race/presentation/pages/live_race_page.dart';
 import '../../features/race/presentation/pages/race_page.dart';
 import '../../features/stats/presentation/pages/player_profile_page.dart';
 import '../../features/stats/presentation/pages/stats_page.dart';
@@ -67,7 +68,19 @@ class AppRouter {
             navigatorKey: _raceNav,
             routes: <RouteBase>[
               GoRoute(
-                  path: '/race', builder: (context, state) => const RacePage()),
+                path: '/race',
+                builder: (context, state) => const RacePage(),
+                routes: <RouteBase>[
+                  // Genuinely outside the shell: the live race is a different
+                  // screen, the nav bar must not exist while you're solving,
+                  // and back is blocked mid-solve (see PopScope there).
+                  GoRoute(
+                    path: 'live',
+                    parentNavigatorKey: _rootNav,
+                    builder: (context, state) => const LiveRacePage(),
+                  ),
+                ],
+              ),
             ],
           ),
           StatefulShellBranch(

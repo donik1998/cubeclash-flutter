@@ -1,0 +1,329 @@
+import 'dart:async';
+import 'dart:math';
+
+import '../../../core/realtime/race_gateway.dart';
+import '../../timer/domain/usecases/generate_scramble.dart';
+
+/// A [RaceGateway] that plays the part of the server **and** an opponent.
+///
+/// The backend doesn't exist yet, and a race is the one feature that cannot be
+/// faked with a static repository — it is a conversation over time. So this
+/// scripts the whole lifecycle: matchmaking waits a beat, an opponent appears,
+/// readies up, the countdown runs, a scramble is revealed, the opponent's
+/// progress ticks up, and the server decides a winner.
+///
+/// It is deliberately a **peer of the socket implementation, not a shortcut**:
+/// it emits the same events, in the same order, with the same payload shape, so
+/// `RaceBloc` cannot tell the difference. That is what makes it worth having —
+/// the bloc is exercised against a real protocol conversation, not a stub.
+///
+/// The opponent's time is drawn from a plausible distribution, so you lose
+/// sometimes. A fake that always lets you win would hide every bug in the
+/// losing path.
+class FakeRaceGateway implements RaceGateway {
+  FakeRaceGateway({Random? random, GenerateScramble? generateScramble})
+      : _random = random ?? Random(),
+        _generateScramble = generateScramble ?? GenerateScramble();
+
+  final Random _random;
+  final GenerateScramble _generateScramble;
+
+  final StreamController<Map<String, dynamic>> _state =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<Map<String, dynamic>> _readyUpdate =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<int> _countdown = StreamController<int>.broadcast();
+  final StreamController<String> _scramble =
+      StreamController<String>.broadcast();
+  final StreamController<int> _opponentProgress =
+      StreamController<int>.broadcast();
+  final StreamController<Map<String, dynamic>> _result =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final StreamController<GatewayConnection> _connection =
+      StreamController<GatewayConnection>.broadcast();
+
+  @override
+  Stream<Map<String, dynamic>> get onState => _state.stream;
+  @override
+  Stream<Map<String, dynamic>> get onReadyUpdate => _readyUpdate.stream;
+  @override
+  Stream<int> get onCountdown => _countdown.stream;
+  @override
+  Stream<String> get onScramble => _scramble.stream;
+  @override
+  Stream<int> get onOpponentProgress => _opponentProgress.stream;
+  @override
+  Stream<Map<String, dynamic>> get onResult => _result.stream;
+  @override
+  Stream<GatewayConnection> get onConnection => _connection.stream;
+
+  final List<Timer> _timers = <Timer>[];
+  bool _disposed = false;
+
+  String _raceId = '';
+  String? _code;
+  int _opponentTargetMs = 0;
+  int _yourTimeMs = 0;
+  bool _youSubmitted = false;
+  bool _opponentSubmitted = false;
+  bool _settled = false;
+
+  static const String _opponentId = 'bot-1';
+  static const String _opponentName = 'Kenji Sato';
+  static const String _opponentCountry = 'JP';
+  static const String _youId = 'me';
+
+  void _later(Duration delay, void Function() action) {
+    if (_disposed) return;
+    _timers.add(Timer(delay, () {
+      if (!_disposed) action();
+    }));
+  }
+
+  @override
+  void connect({String? accessToken}) {
+    _connection.add(GatewayConnection.connecting);
+    _later(const Duration(milliseconds: 200), () {
+      _connection.add(GatewayConnection.connected);
+    });
+  }
+
+  @override
+  void createRace({required String mode, String event = '3x3'}) {
+    _reset();
+    _raceId = 'race-${_random.nextInt(1 << 30)}';
+    _code = mode == 'private' ? _inviteCode() : null;
+
+    // Room opens empty — you, waiting.
+    _emitState(status: 'waiting', withOpponent: false);
+
+    // Quick match pairs after a realistic wait; a private room waits for a
+    // human, so the fake opponent joins after a longer, "someone used your
+    // code" delay.
+    final Duration wait = mode == 'private'
+        ? const Duration(seconds: 6)
+        : Duration(milliseconds: 1800 + _random.nextInt(2600));
+
+    _later(wait, () {
+      _emitState(status: 'ready-check', withOpponent: true);
+      // The opponent readies up a moment after appearing.
+      _later(Duration(milliseconds: 900 + _random.nextInt(1400)), () {
+        _readyUpdate.add(<String, dynamic>{
+          'user_id': _opponentId,
+          'ready': true,
+        });
+        _emitState(status: 'ready-check', withOpponent: true, oppReady: true);
+        _maybeStartCountdown();
+      });
+    });
+  }
+
+  @override
+  void joinByCode(String code) {
+    _reset();
+    _raceId = 'race-${_random.nextInt(1 << 30)}';
+    _code = code;
+
+    // Joining an existing room drops you straight into ready-check.
+    _later(const Duration(milliseconds: 600), () {
+      _emitState(status: 'ready-check', withOpponent: true);
+      _later(Duration(milliseconds: 800 + _random.nextInt(1200)), () {
+        _readyUpdate.add(<String, dynamic>{
+          'user_id': _opponentId,
+          'ready': true,
+        });
+        _emitState(status: 'ready-check', withOpponent: true, oppReady: true);
+        _maybeStartCountdown();
+      });
+    });
+  }
+
+  bool _youReady = false;
+  bool _oppReady = false;
+
+  @override
+  void ready() {
+    _youReady = true;
+    _readyUpdate.add(<String, dynamic>{'user_id': _youId, 'ready': true});
+    _emitState(
+      status: 'ready-check',
+      withOpponent: true,
+      youReady: true,
+      oppReady: _oppReady,
+    );
+    _maybeStartCountdown();
+  }
+
+  void _maybeStartCountdown() {
+    if (!_youReady || !_oppReady || _settled) return;
+    _startCountdown();
+  }
+
+  void _startCountdown() {
+    _emitState(
+        status: 'countdown',
+        withOpponent: true,
+        youReady: true,
+        oppReady: true);
+
+    // 3 · 2 · 1 · GO(0), one per second.
+    for (int n = 3; n >= 0; n--) {
+      _later(Duration(seconds: 3 - n), () => _countdown.add(n));
+    }
+
+    // The scramble is revealed on GO, to both at once.
+    _later(const Duration(seconds: 3), () {
+      _scramble.add(_generateScramble('3x3'));
+      _emitState(
+          status: 'racing', withOpponent: true, youReady: true, oppReady: true);
+      _runOpponent();
+    });
+  }
+
+  /// The opponent solves in a plausible time, occasionally DNFing, with their
+  /// running clock reported at ~10 Hz like the real `race:opponent_progress`.
+  void _runOpponent() {
+    _opponentTargetMs = 9000 + _random.nextInt(9000);
+    final bool opponentDnfs = _random.nextDouble() < 0.08;
+
+    const Duration tick = Duration(milliseconds: 100);
+    int elapsed = 0;
+
+    final Timer timer = Timer.periodic(tick, (Timer t) {
+      if (_disposed || _settled) {
+        t.cancel();
+        return;
+      }
+      elapsed += tick.inMilliseconds;
+      _opponentProgress.add(elapsed);
+
+      if (elapsed >= _opponentTargetMs) {
+        t.cancel();
+        _opponentSubmitted = true;
+        if (opponentDnfs) _opponentTargetMs = -1; // sentinel: DNF
+        _maybeSettle();
+      }
+    });
+    _timers.add(timer);
+  }
+
+  @override
+  void solveStart() {
+    // The server stamps its own receipt time; nothing to echo back.
+  }
+
+  @override
+  void solveStop(int clientTimeMs) {
+    // Idempotent: the server ignores a duplicate submit once a participant is
+    // marked submitted (docs → Real-time Race Protocol § Resilience). The bloc
+    // guards this too; both layers must, since either can be the one that
+    // double-fires.
+    if (_youSubmitted) return;
+    _youSubmitted = true;
+    _yourTimeMs = clientTimeMs;
+    _maybeSettle();
+  }
+
+  void _maybeSettle() {
+    if (_settled || !_youSubmitted || !_opponentSubmitted) return;
+    _settled = true;
+
+    final bool oppDnf = _opponentTargetMs < 0;
+    // The *server* decides. Rendered as-is by the client.
+    final bool youWin = oppDnf || _yourTimeMs < _opponentTargetMs;
+
+    _later(const Duration(milliseconds: 400), () {
+      _emitState(status: 'settled', withOpponent: true);
+      _result.add(<String, dynamic>{
+        'result': youWin ? 'win' : 'loss',
+        'your_time': _yourTimeMs,
+        'opp_time': oppDnf ? null : _opponentTargetMs,
+        'opponent_dnf': oppDnf,
+        'elo_delta':
+            youWin ? 12 + _random.nextInt(12) : -(8 + _random.nextInt(10)),
+      });
+    });
+  }
+
+  @override
+  void leave() {
+    _cancelTimers();
+    _connection.add(GatewayConnection.disconnected);
+  }
+
+  void _reset() {
+    _cancelTimers();
+    _youReady = false;
+    _oppReady = false;
+    _youSubmitted = false;
+    _opponentSubmitted = false;
+    _settled = false;
+    _yourTimeMs = 0;
+  }
+
+  void _cancelTimers() {
+    for (final Timer t in _timers) {
+      t.cancel();
+    }
+    _timers.clear();
+  }
+
+  void _emitState({
+    required String status,
+    required bool withOpponent,
+    bool youReady = false,
+    bool oppReady = false,
+  }) {
+    _youReady = youReady || _youReady;
+    _oppReady = oppReady || _oppReady;
+
+    _state.add(<String, dynamic>{
+      'race_id': _raceId,
+      'status': status,
+      if (_code != null) 'code': _code,
+      'event': '3x3',
+      'players': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'user_id': _youId,
+          'display_name': 'You',
+          'country': 'GB',
+          'ready': _youReady,
+          'is_me': true,
+          'connected': true,
+        },
+        if (withOpponent)
+          <String, dynamic>{
+            'user_id': _opponentId,
+            'display_name': _opponentName,
+            'country': _opponentCountry,
+            'ready': _oppReady,
+            'is_me': false,
+            'connected': true,
+          },
+      ],
+    });
+  }
+
+  /// Six uppercase letters, ambiguous glyphs removed — an invite code gets read
+  /// aloud and typed by hand.
+  String _inviteCode() {
+    const String alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    return String.fromCharCodes(<int>[
+      for (int i = 0; i < 6; i++)
+        alphabet.codeUnitAt(_random.nextInt(alphabet.length)),
+    ]);
+  }
+
+  @override
+  Future<void> dispose() async {
+    _disposed = true;
+    _cancelTimers();
+    await _state.close();
+    await _readyUpdate.close();
+    await _countdown.close();
+    await _scramble.close();
+    await _opponentProgress.close();
+    await _result.close();
+    await _connection.close();
+  }
+}

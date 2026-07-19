@@ -6,6 +6,8 @@ import '../../features/timer/domain/repositories/solve_repository.dart';
 import '../../features/timer/domain/usecases/generate_scramble.dart';
 import '../../features/timer/presentation/bloc/timer_bloc.dart';
 import '../../features/timer/presentation/cubit/history_cubit.dart';
+import '../../features/race/data/fake_race_gateway.dart';
+import '../../features/race/presentation/bloc/race_bloc.dart';
 import '../../features/stats/data/repositories/fake_stats_repository.dart';
 import '../../features/stats/data/repositories/stats_repository_impl.dart';
 import '../../features/stats/domain/repositories/stats_repository.dart';
@@ -46,7 +48,12 @@ Future<void> configureDependencies() async {
   sl
     ..registerLazySingleton<TokenStore>(TokenStore.new)
     ..registerLazySingleton<DioClient>(() => DioClient(sl<TokenStore>()))
-    ..registerLazySingleton<RaceGateway>(RaceGateway.new)
+    // The race is the one feature a static fake can't cover — it's a
+    // conversation over time — so the fake is a scripted gateway that emits the
+    // same events in the same order as the socket one.
+    ..registerLazySingleton<RaceGateway>(
+      () => kUseFakeData ? FakeRaceGateway() : SocketRaceGateway(),
+    )
     ..registerLazySingleton<AnalyticsService>(() => const NoopAnalytics())
     ..registerLazySingleton<Ticker>(() => const RealTicker())
     ..registerLazySingleton<ImmersiveController>(ImmersiveController.new);
@@ -94,6 +101,18 @@ Future<void> configureDependencies() async {
     ..registerFactory<PlayerProfileCubit>(
       () => PlayerProfileCubit(repository: sl<StatsRepository>()),
     );
+
+  // --- Race ------------------------------------------------------------------
+  // A singleton, unlike the other blocs: a race outlives the lobby widget that
+  // started it (the Live Race and Result screens are separate routes), so its
+  // state cannot be tied to one screen's lifetime.
+  sl.registerLazySingleton<RaceBloc>(
+    () => RaceBloc(
+      gateway: sl<RaceGateway>(),
+      analytics: sl<AnalyticsService>(),
+      ticker: sl<Ticker>(),
+    ),
+  );
 }
 
 /// Tears the locator down. Tests call this between cases so a stale singleton
