@@ -31,12 +31,17 @@ lib/
   core/       theme · router · network · realtime · analytics · di · error · widgets
   features/<feature>/  presentation · domain · data
   app.dart · main.dart
+assets/fonts/ Noto Serif (bundled variable font)
+test/
+  support/harness.dart      themed pump helpers + golden helper
+  **/goldens/*.png          goldens live next to their test file
 ```
 
-Current state: the **timer** feature has real domain code (`Solve`, `Penalty`,
-`ComputeAverages`); **race/stats/profile** are themed placeholders wired into the
-4-tab shell. Backend access is stubbed (`DioClient`, `RaceGateway`, `TokenStore`)
-— no live calls yet.
+Current state (Phase A complete): the shared **component library** in
+`core/widgets` is built and golden-tested in light + dark. The **timer** feature
+has real domain code (`Solve`, `Penalty`, `ComputeAverages`); **race/stats/
+profile** are still themed placeholders wired into the 4-tab shell. Backend
+access is stubbed (`DioClient`, `RaceGateway`, `TokenStore`) — no live calls yet.
 
 ## Conventions
 
@@ -46,7 +51,10 @@ Current state: the **timer** feature has real domain code (`Solve`, `Penalty`,
 - **Routing:** go_router `StatefulShellRoute` (4-tab shell) in `core/router`. Immersive flows (running solve, live race) become full-screen routes outside the shell.
 - **Networking:** Dio + `AuthInterceptor` (JWT attach + refresh-on-401). Base URL via `--dart-define=API_BASE_URL`. REST base is `/v1`, fields are `snake_case`.
 - **Real-time:** `RaceGateway` wraps socket_io_client on the `/race` namespace and exposes typed streams; the Race Bloc subscribes.
-- **Theming:** design tokens in `core/theme` (`AppColors` light/dark, `AppSpacing`, `AppRadius`). Read via `context.colors`. Noto Serif via google_fonts. **Never hardcode colors/spacing — use tokens.**
+- **Theming:** design tokens in `core/theme` (`AppColors` light/dark, `AppSpacing`, `AppRadius`, `AppTypography`). Read colors via `context.colors`, type via `AppTypography.<scale>`. **Never hardcode colors/spacing/type — use tokens.**
+- **Typography:** Noto Serif is a **bundled variable font** (`assets/fonts`, declared in pubspec). google_fonts was removed — it fetches at runtime, which means FOUT, a hard failure offline, and it refuses to render under `flutter test` (breaking goldens). Live-updating numbers must use `.tabular`.
+- **Components:** the shared library lives in `core/widgets`, imported via the `widgets.dart` barrel. Compose screens from it — don't re-roll buttons/chips/cards per feature.
+- **Every async screen ships loading + empty + error** (`LoadingState` / `EmptyState` / `ErrorState`). Not just the happy path.
 - **Offline:** the Solves repository is local-first (Drift); reconcile via `POST /sync` (last-write-wins by `updated_at` + `client_id`). Not built yet.
 - **Analytics:** `AnalyticsService` (no-op default). Authoritative events fire server-side; UI events client-side.
 

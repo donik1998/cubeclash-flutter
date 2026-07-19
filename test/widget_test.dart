@@ -1,13 +1,11 @@
 import 'package:cubeclash/app.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
+
+import 'support/harness.dart';
 
 void main() {
-  setUpAll(() {
-    // Don't hit the network for fonts during tests.
-    GoogleFonts.config.allowRuntimeFetching = false;
-  });
+  setUpAll(initTestFonts);
 
   testWidgets('App boots into the Timer tab with the 4-tab shell',
       (WidgetTester tester) async {

@@ -23,4 +23,18 @@ class AppRadius {
   static const double lg = 16;
   static const double xl = 20;
   static const double pill = 999;
+
+  // --- Component radii -------------------------------------------------------
+  // The design system specifies these off the sm/md/lg/xl scale. They are
+  // tokens rather than inline literals so the exception stays in one place.
+  //   docs → 05 Design/Design System § Components
+
+  /// Buttons — 14 (design system, deliberately between [md] and [lg]).
+  static const double button = 14;
+
+  /// Inputs — 12 (aliases [md]).
+  static const double input = md;
+
+  /// Cards — 16 (aliases [lg]).
+  static const double card = lg;
 }

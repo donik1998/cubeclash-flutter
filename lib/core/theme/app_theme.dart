@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
+import 'app_typography.dart';
 
 /// Builds the light / dark [ThemeData] from design-system tokens.
 ///
@@ -15,9 +15,6 @@ class AppTheme {
   static ThemeData dark() => _build(AppColors.dark);
 
   static ThemeData _build(AppColors c) {
-    final ThemeData base =
-        c.brightness == Brightness.dark ? ThemeData.dark() : ThemeData.light();
-
     final ColorScheme scheme = ColorScheme.fromSeed(
       seedColor: c.brandPrimary,
       brightness: c.brightness,
@@ -34,7 +31,8 @@ class AppTheme {
       colorScheme: scheme,
       scaffoldBackgroundColor: c.bgCanvas,
       dividerColor: c.borderSubtle,
-      textTheme: GoogleFonts.notoSerifTextTheme(base.textTheme).apply(
+      fontFamily: AppTypography.fontFamily,
+      textTheme: AppTypography.textTheme.apply(
         bodyColor: c.textPrimary,
         displayColor: c.textPrimary,
       ),

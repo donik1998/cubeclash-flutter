@@ -30,8 +30,12 @@ dependencies:
   # Real-time races — Socket.IO (protocol: docs/Real-time Race Protocol)
   socket_io_client: ^2.0.3
 
-  # Typography — Noto Serif (design system)
-  google_fonts: ^6.2.1
+  # NOTE: Noto Serif is **bundled** (see `flutter: fonts:` below) rather than
+  # pulled at runtime via google_fonts. google_fonts fetches the TTF over the
+  # network on first launch — that means a flash of fallback type, a hard
+  # failure offline, and it refuses to render at all under `flutter test`
+  # (breaking golden tests). One 1.8 MB variable font in the bundle is the
+  # better trade for a type-led design system.
 
   # --- Added as the data / sync / analytics layers land -----------------------
   # Uncomment per layer so the initial build stays green with zero native config.
@@ -61,5 +65,13 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  fonts:
+    # A single variable font covering the whole weight axis the design system
+    # uses (Regular 400 → ExtraBold 800). Flutter maps `fontWeight` onto the
+    # font's `wght` axis, so no per-weight files are needed.
+    - family: Noto Serif
+      fonts:
+        - asset: assets/fonts/NotoSerif-Variable.ttf
   # assets:
   #   - assets/

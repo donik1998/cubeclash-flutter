@@ -46,3 +46,4 @@ app.*.map.json
 
 # Claude Code (personal, machine-local — shared config stays in settings.json)
 .claude/settings.local.json
+IMPLEMENTATION_PROMPT.md
