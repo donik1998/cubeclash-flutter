@@ -6,6 +6,13 @@ import '../../features/timer/domain/repositories/solve_repository.dart';
 import '../../features/timer/domain/usecases/generate_scramble.dart';
 import '../../features/timer/presentation/bloc/timer_bloc.dart';
 import '../../features/timer/presentation/cubit/history_cubit.dart';
+import '../../features/profile/data/repositories/fake_profile_repository.dart';
+import '../../features/profile/data/repositories/profile_repository_impl.dart';
+import '../../features/profile/data/repositories/settings_repository_impl.dart';
+import '../../features/profile/domain/repositories/profile_repository.dart';
+import '../../features/profile/presentation/cubit/friends_cubit.dart';
+import '../../features/profile/presentation/cubit/profile_cubit.dart';
+import '../../features/profile/presentation/cubit/settings_cubit.dart';
 import '../../features/race/data/fake_race_gateway.dart';
 import '../../features/race/presentation/bloc/race_bloc.dart';
 import '../../features/stats/data/repositories/fake_stats_repository.dart';
@@ -100,6 +107,31 @@ Future<void> configureDependencies() async {
     )
     ..registerFactory<PlayerProfileCubit>(
       () => PlayerProfileCubit(repository: sl<StatsRepository>()),
+    );
+
+  // --- Profile / settings ----------------------------------------------------
+  sl
+    // Settings are device preferences, not account data — no fake/real split,
+    // and they must work with no backend at all.
+    ..registerLazySingleton<SettingsRepository>(SettingsRepositoryImpl.new)
+    ..registerLazySingleton<ProfileRepository>(
+      () => kUseFakeData
+          ? FakeProfileRepository()
+          : ProfileRepositoryImpl(sl<DioClient>(), sl<TokenStore>()),
+    )
+    // A singleton: the theme is one of its values, so it is provided above
+    // MaterialApp and outlives every screen.
+    ..registerLazySingleton<SettingsCubit>(
+      () => SettingsCubit(
+        repository: sl<SettingsRepository>(),
+        analytics: sl<AnalyticsService>(),
+      ),
+    )
+    ..registerFactory<ProfileCubit>(
+      () => ProfileCubit(repository: sl<ProfileRepository>()),
+    )
+    ..registerFactory<FriendsCubit>(
+      () => FriendsCubit(repository: sl<ProfileRepository>()),
     );
 
   // --- Race ------------------------------------------------------------------

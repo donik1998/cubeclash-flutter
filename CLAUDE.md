@@ -50,7 +50,9 @@ Current state (Phases A–B complete):
   disconnect, reconnect and idempotent-submit handling; lobby (quick/private/
   tournaments), matchmaking modal, ready room, full-screen live race and both
   result states.
-- **profile** — still a themed placeholder in the 4-tab shell.
+- **You feature** — complete. Profile, Settings (persisted via
+  shared_preferences; theme is bound to `SettingsCubit` above `MaterialApp`)
+  and Friends. `feature_placeholder.dart` is gone — all four tabs are real.
 
 Backend access is stubbed. Every repository ships a `Fake…` and a real impl;
 `kUseFakeData` in `injection.dart` picks one.
@@ -64,6 +66,8 @@ Backend access is stubbed. Every repository ships a `Fake…` and a real impl;
 - **Networking:** Dio + `AuthInterceptor` (JWT attach + refresh-on-401). Base URL via `--dart-define=API_BASE_URL`. REST base is `/v1`, fields are `snake_case`.
 - **Real-time:** `RaceGateway` is an *interface*; `SocketRaceGateway` wraps socket_io_client on `/race`, `FakeRaceGateway` scripts the whole lifecycle (opponent included) so races are demoable with no backend. Both emit identical events in identical order, so `RaceBloc` can't tell them apart. `RaceBloc` is a **singleton** — a race outlives the lobby widget, since Live Race is its own route.
 - **The server owns competitive truth.** The Race bloc never compares two times, picks a winner, or computes an Elo change; it renders `race:result`. Same rule for `is_pb` and leaderboard rank.
+- **Settings** live in `SettingsCubit`, a **singleton provided above `MaterialApp`** (the theme is one of its values) and loaded in `main()` before the first frame so the app never flashes the wrong theme. Every change writes through immediately — no save button. The Timer screen listens and forwards `timerPreferences` to `TimerBloc`.
+- **Tests that touch settings** must register `InMemorySettingsRepository` (test/support) — `shared_preferences` goes through a platform channel that never answers under `flutter test`, so a write just hangs.
 - **Theming:** design tokens in `core/theme` (`AppColors` light/dark, `AppSpacing`, `AppRadius`, `AppTypography`). Read colors via `context.colors`, type via `AppTypography.<scale>`. **Never hardcode colors/spacing/type — use tokens.**
 - **Typography:** Noto Serif is a **bundled variable font** (`assets/fonts`, declared in pubspec). google_fonts was removed — it fetches at runtime, which means FOUT, a hard failure offline, and it refuses to render under `flutter test` (breaking goldens). Live-updating numbers must use `.tabular`.
 - **Components:** the shared library lives in `core/widgets`, imported via the `widgets.dart` barrel. Compose screens from it — don't re-roll buttons/chips/cards per feature.

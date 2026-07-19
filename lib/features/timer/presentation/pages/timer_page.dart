@@ -9,6 +9,8 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/widgets.dart';
+import '../../../profile/domain/entities/app_settings.dart';
+import '../../../profile/presentation/cubit/settings_cubit.dart';
 import '../../domain/entities/penalty.dart';
 import '../bloc/timer_bloc.dart';
 import '../widgets/last_solves_strip.dart';
@@ -28,8 +30,23 @@ class TimerPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider<TimerBloc>(
-      create: (_) => sl<TimerBloc>()..add(const TimerStarted()),
-      child: const _TimerView(),
+      create: (_) => sl<TimerBloc>()
+        // Seed from the persisted settings so the very first press behaves the
+        // way the user configured it, not the way the defaults do.
+        ..add(TimerPreferencesChanged(
+          context.read<SettingsCubit>().state.timerPreferences,
+        ))
+        ..add(const TimerStarted()),
+      // Keep them in sync afterwards: changing timer style in Settings must
+      // take effect without restarting the app.
+      child: BlocListener<SettingsCubit, AppSettings>(
+        listenWhen: (AppSettings a, AppSettings b) =>
+            a.timerPreferences != b.timerPreferences,
+        listener: (BuildContext context, AppSettings settings) => context
+            .read<TimerBloc>()
+            .add(TimerPreferencesChanged(settings.timerPreferences)),
+        child: const _TimerView(),
+      ),
     );
   }
 }

@@ -1,7 +1,9 @@
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/profile/presentation/pages/friends_page.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
+import '../../features/profile/presentation/pages/settings_page.dart';
 import '../../features/race/presentation/pages/live_race_page.dart';
 import '../../features/race/presentation/pages/race_page.dart';
 import '../../features/stats/presentation/pages/player_profile_page.dart';
@@ -105,8 +107,21 @@ class AppRouter {
             navigatorKey: _youNav,
             routes: <RouteBase>[
               GoRoute(
-                  path: '/you',
-                  builder: (context, state) => const ProfilePage()),
+                path: '/you',
+                builder: (context, state) => const ProfilePage(),
+                routes: <RouteBase>[
+                  GoRoute(
+                    path: 'settings',
+                    parentNavigatorKey: _rootNav,
+                    builder: (context, state) => const SettingsPage(),
+                  ),
+                  GoRoute(
+                    path: 'friends',
+                    parentNavigatorKey: _rootNav,
+                    builder: (context, state) => const FriendsPage(),
+                  ),
+                ],
+              ),
             ],
           ),
         ],

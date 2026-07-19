@@ -1,13 +1,17 @@
 import 'package:bloc_test/bloc_test.dart';
 import 'package:cubeclash/core/di/injection.dart';
+import 'package:cubeclash/features/profile/domain/repositories/profile_repository.dart';
+import 'package:cubeclash/features/profile/presentation/cubit/settings_cubit.dart';
 import 'package:cubeclash/features/timer/domain/entities/penalty.dart';
 import 'package:cubeclash/features/timer/domain/entities/solve.dart';
 import 'package:cubeclash/features/timer/presentation/bloc/timer_bloc.dart';
 import 'package:cubeclash/features/timer/presentation/pages/timer_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/harness.dart';
+import '../../support/in_memory_settings_repository.dart';
 
 class _MockTimerBloc extends MockBloc<TimerEvent, TimerState>
     implements TimerBloc {}
@@ -21,6 +25,10 @@ void main() {
 
   setUp(() async {
     await configureDependencies();
+    // shared_preferences has no platform channel under `flutter test`.
+    sl
+      ..unregister<SettingsRepository>()
+      ..registerSingleton<SettingsRepository>(InMemorySettingsRepository());
     bloc = _MockTimerBloc();
     sl.unregister<TimerBloc>();
     sl.registerFactory<TimerBloc>(() => bloc);
@@ -54,7 +62,8 @@ void main() {
       whenListen(bloc, const Stream<TimerState>.empty(), initialState: state);
       await tester.binding.setSurfaceSize(phone);
       await tester.pumpWidget(
-        harnessPage(const TimerPage(), brightness: brightness, size: phone),
+        harnessPage(withAppScope(const TimerPage()),
+            brightness: brightness, size: phone),
       );
       await tester.pumpAndSettle();
       await expectLater(
@@ -129,3 +138,11 @@ void main() {
     );
   });
 }
+
+/// Wraps [page] with the app-wide providers that live above `MaterialApp` in
+/// the real app — currently [SettingsCubit], which owns the theme and the
+/// timer's preferences. Screens that read them need this in tests too.
+Widget withAppScope(Widget page) => BlocProvider<SettingsCubit>.value(
+      value: sl<SettingsCubit>(),
+      child: page,
+    );
