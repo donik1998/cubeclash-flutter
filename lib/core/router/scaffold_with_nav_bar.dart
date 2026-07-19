@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../di/injection.dart';
 import '../theme/app_colors.dart';
+import 'immersive_controller.dart';
 import '../theme/app_spacing.dart';
 
 /// Bottom navigation shell (4 tabs: Timer · Race · Stats · You).
@@ -28,10 +30,23 @@ class ScaffoldWithNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final AppColors colors = context.colors;
     return Scaffold(
       body: navigationShell,
-      bottomNavigationBar: DecoratedBox(
+      // Chrome disappears during an immersive flow (a running solve) so the
+      // nav bar cannot be mis-tapped. The shell listens to a plain boolean
+      // rather than any feature's bloc — see ImmersiveController.
+      bottomNavigationBar: ValueListenableBuilder<bool>(
+        valueListenable: sl<ImmersiveController>(),
+        builder: (BuildContext context, bool immersive, Widget? bar) =>
+            immersive ? const SizedBox.shrink() : bar!,
+        child: _buildBar(context),
+      ),
+    );
+  }
+
+  Widget _buildBar(BuildContext context) {
+    final AppColors colors = context.colors;
+    return DecoratedBox(
         decoration: BoxDecoration(
           color: colors.bgSurface,
           border: Border(top: BorderSide(color: colors.borderSubtle)),
@@ -55,9 +70,7 @@ class ScaffoldWithNavBar extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
+        ));
   }
 }
 

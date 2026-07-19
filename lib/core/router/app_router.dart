@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/race/presentation/pages/race_page.dart';
 import '../../features/stats/presentation/pages/stats_page.dart';
+import '../../features/timer/presentation/pages/session_history_page.dart';
+import '../../features/timer/presentation/pages/solve_detail_page.dart';
 import '../../features/timer/presentation/pages/timer_page.dart';
 import 'scaffold_with_nav_bar.dart';
 
@@ -12,6 +14,11 @@ import 'scaffold_with_nav_bar.dart';
 /// solve, a live race) become full-screen routes outside the shell later.
 class AppRouter {
   const AppRouter._();
+
+  /// The root navigator. Routes that specify it as their parent are pushed
+  /// **above** the shell, so they are full-screen with no bottom nav.
+  static final GlobalKey<NavigatorState> _rootNav =
+      GlobalKey<NavigatorState>(debugLabel: 'root');
 
   static final GlobalKey<NavigatorState> _timerNav =
       GlobalKey<NavigatorState>(debugLabel: 'timer');
@@ -23,6 +30,7 @@ class AppRouter {
       GlobalKey<NavigatorState>(debugLabel: 'you');
 
   static final GoRouter router = GoRouter(
+    navigatorKey: _rootNav,
     initialLocation: '/timer',
     routes: <RouteBase>[
       StatefulShellRoute.indexedStack(
@@ -33,8 +41,25 @@ class AppRouter {
             navigatorKey: _timerNav,
             routes: <RouteBase>[
               GoRoute(
-                  path: '/timer',
-                  builder: (context, state) => const TimerPage()),
+                path: '/timer',
+                builder: (context, state) => const TimerPage(),
+                routes: <RouteBase>[
+                  // Pushed above the shell (parentNavigatorKey: root) so these
+                  // are full-screen — no nav bar to mis-tap mid-review.
+                  GoRoute(
+                    path: 'history',
+                    parentNavigatorKey: _rootNav,
+                    builder: (context, state) => const SessionHistoryPage(),
+                  ),
+                  GoRoute(
+                    path: 'solve/:id',
+                    parentNavigatorKey: _rootNav,
+                    builder: (context, state) => SolveDetailPage(
+                      solveId: state.pathParameters['id']!,
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
           StatefulShellBranch(

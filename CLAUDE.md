@@ -37,11 +37,16 @@ test/
   **/goldens/*.png          goldens live next to their test file
 ```
 
-Current state (Phase A complete): the shared **component library** in
-`core/widgets` is built and golden-tested in light + dark. The **timer** feature
-has real domain code (`Solve`, `Penalty`, `ComputeAverages`); **race/stats/
-profile** are still themed placeholders wired into the 4-tab shell. Backend
-access is stubbed (`DioClient`, `RaceGateway`, `TokenStore`) — no live calls yet.
+Current state (Phases A–B complete):
+
+- **Component library** (`core/widgets`) — built, golden-tested light + dark.
+- **Timer feature** — complete. Local scrambler with move-cancellation rules,
+  `TimerBloc` state machine (inspection +2/DNF boundaries, hold/tap styles),
+  and all three screens (Home, Solve Detail, Session & History).
+- **race / stats / profile** — still themed placeholders in the 4-tab shell.
+
+Backend access is stubbed. Every repository ships a `Fake…` and a real impl;
+`kUseFakeData` in `injection.dart` picks one.
 
 ## Conventions
 
@@ -55,7 +60,12 @@ access is stubbed (`DioClient`, `RaceGateway`, `TokenStore`) — no live calls y
 - **Typography:** Noto Serif is a **bundled variable font** (`assets/fonts`, declared in pubspec). google_fonts was removed — it fetches at runtime, which means FOUT, a hard failure offline, and it refuses to render under `flutter test` (breaking goldens). Live-updating numbers must use `.tabular`.
 - **Components:** the shared library lives in `core/widgets`, imported via the `widgets.dart` barrel. Compose screens from it — don't re-roll buttons/chips/cards per feature.
 - **Every async screen ships loading + empty + error** (`LoadingState` / `EmptyState` / `ErrorState`). Not just the happy path.
-- **Offline:** the Solves repository is local-first (Drift); reconcile via `POST /sync` (last-write-wins by `updated_at` + `client_id`). Not built yet.
+- **Offline:** the Solves repository is local-first (Drift); reconcile via `POST /sync` (last-write-wins by `updated_at` + `client_id`). Not built yet — the vault marks full offline sync as fast-follow, not MVP, so `SolveRepositoryImpl` keeps an in-memory session mirror behind the streaming `watchSession()` seam Drift will slot into.
+- **Errors:** repositories return `Result<T>` (`Ok`/`Err` in `core/error/result.dart`), never throw. Presentation switches over it exhaustively. Cursor pages use `Page<T>` (`{items, next_cursor}`).
+- **Fake vs real data:** every feature defines its repository interface against the documented API, then ships `FakeXRepository` (seeded, realistic) **and** `XRepositoryImpl` (Dio). `kUseFakeData` (`--dart-define=USE_FAKE_DATA=false`) switches them. Fakes never invent server-owned fields (`is_pb`, `elo`, rank).
+- **Time-driven blocs** take a `Ticker` (`core/util/ticker.dart`); tests inject `FakeTicker` to hit exact boundaries without sleeping.
+- **Immersive flows:** the running solve hides shell chrome via `ImmersiveController` (a `ValueNotifier<bool>` the shell watches) rather than a route push — same nav-safety, no navigation on the latency-critical press. The Live Race *is* a real full-screen route.
+- **Tests:** call `initTestFonts()` in `setUpAll` — without it `flutter test` renders every icon and glyph as a box. Use `harness()` for components, `harnessPage()` for full screens (a page needs a bounded viewport).
 - **Analytics:** `AnalyticsService` (no-op default). Authoritative events fire server-side; UI events client-side.
 
 ## Design tokens (source: Obsidian → Design System)
