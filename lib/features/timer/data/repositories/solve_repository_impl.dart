@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 
-import '../../../../core/error/failures.dart';
 import '../../../../core/error/result.dart';
 import '../../../../core/network/dio_client.dart';
+import '../../../../core/network/dio_failures.dart';
 import '../../../../core/network/page.dart';
 import '../../domain/entities/penalty.dart';
 import '../../domain/entities/solve.dart';
@@ -64,13 +64,13 @@ class SolveRepositoryImpl implements SolveRepository {
             ),
           );
           final Solve solve = SolveDto.fromJson(
-            _unwrap(response.data, 'solve'),
+            unwrap(response.data, 'solve'),
           );
           _session.add(solve);
           _emitSession();
           return solve;
         },
-        onError: _toFailure,
+        onError: dioFailure,
       );
 
   @override
@@ -84,7 +84,7 @@ class SolveRepositoryImpl implements SolveRepository {
             },
           );
           final Solve solve = SolveDto.fromJson(
-            _unwrap(response.data, 'solve'),
+            unwrap(response.data, 'solve'),
           );
 
           final int index = _session.indexWhere((Solve s) => s.id == id);
@@ -94,7 +94,7 @@ class SolveRepositoryImpl implements SolveRepository {
           }
           return solve;
         },
-        onError: _toFailure,
+        onError: dioFailure,
       );
 
   @override
@@ -104,7 +104,7 @@ class SolveRepositoryImpl implements SolveRepository {
           _session.removeWhere((Solve s) => s.id == id);
           _emitSession();
         },
-        onError: _toFailure,
+        onError: dioFailure,
       );
 
   @override
@@ -121,7 +121,7 @@ class SolveRepositoryImpl implements SolveRepository {
               if (cursor != null) 'cursor': cursor,
             },
           );
-          final Map<String, dynamic> body = _asMap(response.data);
+          final Map<String, dynamic> body = asJsonMap(response.data);
           final List<dynamic> items =
               (body['items'] as List<dynamic>?) ?? <dynamic>[];
 
@@ -133,7 +133,7 @@ class SolveRepositoryImpl implements SolveRepository {
             nextCursor: body['next_cursor'] as String?,
           );
         },
-        onError: _toFailure,
+        onError: dioFailure,
       );
 
   @override
@@ -143,61 +143,6 @@ class SolveRepositoryImpl implements SolveRepository {
     _session.clear();
     _emitSession();
     return const Ok<void>(null);
-  }
-
-  /// Responses are documented as wrapping their payload (`{ solve }`,
-  /// `{ user }`). Tolerate a bare object too, so a server that returns the
-  /// resource unwrapped doesn't break the client.
-  Map<String, dynamic> _unwrap(dynamic data, String key) {
-    final Map<String, dynamic> body = _asMap(data);
-    final dynamic inner = body[key];
-    return inner is Map ? Map<String, dynamic>.from(inner) : body;
-  }
-
-  Map<String, dynamic> _asMap(dynamic data) =>
-      data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
-
-  /// Maps transport errors onto domain failures, including the server's
-  /// documented error envelope `{ error: { code, message, details } }`.
-  static Failure _toFailure(Object error, StackTrace _) {
-    if (error is! DioException) {
-      return ServerFailure('Unexpected error: $error');
-    }
-
-    switch (error.type) {
-      case DioExceptionType.connectionTimeout:
-      case DioExceptionType.sendTimeout:
-      case DioExceptionType.receiveTimeout:
-      case DioExceptionType.transformTimeout:
-      case DioExceptionType.connectionError:
-        return const NetworkFailure(
-          "Can't reach CubeClash. Check your connection.",
-        );
-      case DioExceptionType.badCertificate:
-      case DioExceptionType.cancel:
-      case DioExceptionType.unknown:
-        return const NetworkFailure('The request could not be completed.');
-      case DioExceptionType.badResponse:
-        break;
-    }
-
-    final int? status = error.response?.statusCode;
-
-    // Documented envelope: `{ error: { code, message, details } }`.
-    String? serverMessage;
-    final dynamic data = error.response?.data;
-    if (data is Map) {
-      final dynamic envelope = data['error'];
-      if (envelope is Map) {
-        final dynamic message = envelope['message'];
-        if (message is String) serverMessage = message;
-      }
-    }
-
-    if (status == 401 || status == 403) {
-      return AuthFailure(serverMessage ?? 'Please sign in again.');
-    }
-    return ServerFailure(serverMessage ?? 'The server rejected that request.');
   }
 
   Future<void> dispose() => _sessionController.close();

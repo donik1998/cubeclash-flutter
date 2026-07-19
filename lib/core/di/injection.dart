@@ -6,6 +6,11 @@ import '../../features/timer/domain/repositories/solve_repository.dart';
 import '../../features/timer/domain/usecases/generate_scramble.dart';
 import '../../features/timer/presentation/bloc/timer_bloc.dart';
 import '../../features/timer/presentation/cubit/history_cubit.dart';
+import '../../features/stats/data/repositories/fake_stats_repository.dart';
+import '../../features/stats/data/repositories/stats_repository_impl.dart';
+import '../../features/stats/domain/repositories/stats_repository.dart';
+import '../../features/stats/presentation/cubit/player_profile_cubit.dart';
+import '../../features/stats/presentation/cubit/stats_cubit.dart';
 import '../../features/timer/presentation/cubit/solve_detail_cubit.dart';
 import '../analytics/analytics_service.dart';
 import '../network/auth_interceptor.dart';
@@ -71,6 +76,23 @@ Future<void> configureDependencies() async {
     )
     ..registerFactory<HistoryCubit>(
       () => HistoryCubit(repository: sl<SolveRepository>()),
+    );
+
+  // --- Stats -----------------------------------------------------------------
+  sl
+    ..registerLazySingleton<StatsRepository>(
+      () => kUseFakeData
+          ? FakeStatsRepository()
+          : StatsRepositoryImpl(sl<DioClient>()),
+    )
+    ..registerFactory<StatsCubit>(
+      () => StatsCubit(
+        repository: sl<StatsRepository>(),
+        analytics: sl<AnalyticsService>(),
+      ),
+    )
+    ..registerFactory<PlayerProfileCubit>(
+      () => PlayerProfileCubit(repository: sl<StatsRepository>()),
     );
 }
 

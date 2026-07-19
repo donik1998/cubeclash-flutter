@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/race/presentation/pages/race_page.dart';
+import '../../features/stats/presentation/pages/player_profile_page.dart';
 import '../../features/stats/presentation/pages/stats_page.dart';
 import '../../features/timer/presentation/pages/session_history_page.dart';
 import '../../features/timer/presentation/pages/solve_detail_page.dart';
@@ -73,8 +74,18 @@ class AppRouter {
             navigatorKey: _statsNav,
             routes: <RouteBase>[
               GoRoute(
-                  path: '/stats',
-                  builder: (context, state) => const StatsPage()),
+                path: '/stats',
+                builder: (context, state) => const StatsPage(),
+                routes: <RouteBase>[
+                  GoRoute(
+                    path: 'player/:id',
+                    parentNavigatorKey: _rootNav,
+                    builder: (context, state) => PlayerProfilePage(
+                      userId: state.pathParameters['id']!,
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
           StatefulShellBranch(

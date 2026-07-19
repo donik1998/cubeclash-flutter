@@ -43,7 +43,10 @@ Current state (Phases A–B complete):
 - **Timer feature** — complete. Local scrambler with move-cancellation rules,
   `TimerBloc` state machine (inspection +2/DNF boundaries, hold/tap styles),
   and all three screens (Home, Solve Detail, Session & History).
-- **race / stats / profile** — still themed placeholders in the 4-tab shell.
+- **Stats feature** — complete. My Stats (PB cards + hand-painted progress and
+  distribution charts), Leaderboards (scope/metric filters, cursor paging,
+  pinned current-user row), Player Profile with head-to-head.
+- **race / profile** — still themed placeholders in the 4-tab shell.
 
 Backend access is stubbed. Every repository ships a `Fake…` and a real impl;
 `kUseFakeData` in `injection.dart` picks one.
@@ -63,6 +66,10 @@ Backend access is stubbed. Every repository ships a `Fake…` and a real impl;
 - **Offline:** the Solves repository is local-first (Drift); reconcile via `POST /sync` (last-write-wins by `updated_at` + `client_id`). Not built yet — the vault marks full offline sync as fast-follow, not MVP, so `SolveRepositoryImpl` keeps an in-memory session mirror behind the streaming `watchSession()` seam Drift will slot into.
 - **Errors:** repositories return `Result<T>` (`Ok`/`Err` in `core/error/result.dart`), never throw. Presentation switches over it exhaustively. Cursor pages use `Page<T>` (`{items, next_cursor}`).
 - **Fake vs real data:** every feature defines its repository interface against the documented API, then ships `FakeXRepository` (seeded, realistic) **and** `XRepositoryImpl` (Dio). `kUseFakeData` (`--dart-define=USE_FAKE_DATA=false`) switches them. Fakes never invent server-owned fields (`is_pb`, `elo`, rank).
+- **Charts** are hand-painted `CustomPainter`s in the owning feature — no chart
+  package. They draw in on load and fall back to an instant render when
+  `MediaQuery.disableAnimations` is set. The progress chart's **y-axis is
+  inverted**: faster is up.
 - **Time-driven blocs** take a `Ticker` (`core/util/ticker.dart`); tests inject `FakeTicker` to hit exact boundaries without sleeping.
 - **Immersive flows:** the running solve hides shell chrome via `ImmersiveController` (a `ValueNotifier<bool>` the shell watches) rather than a route push — same nav-safety, no navigation on the latency-critical press. The Live Race *is* a real full-screen route.
 - **Tests:** call `initTestFonts()` in `setUpAll` — without it `flutter test` renders every icon and glyph as a box. Use `harness()` for components, `harnessPage()` for full screens (a page needs a bounded viewport).
