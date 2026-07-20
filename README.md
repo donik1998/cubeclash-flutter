@@ -71,7 +71,7 @@ See `CLAUDE.md` for architecture, conventions, and the backend contract.
 
 ## Status
 
-✅ **All 19 screens built**, 270 tests green.
+✅ **All 19 screens built**, all 17 WCA events supported, 382 tests green.
 
 | Phase | Scope | State |
 |---|---|---|
@@ -82,8 +82,18 @@ See `CLAUDE.md` for architecture, conventions, and the backend contract.
 | E | You — Profile, Settings, Friends, persisted prefs | ✅ |
 | F | Auth — 4 screens, secure tokens, refresh, route guard | ✅ |
 | G | Motion (nav Variant C), reduce-motion, a11y, goldens | ✅ |
+| H | All 17 WCA events — event/result model, per-event formats, big-cube scrambler | ✅ |
 
-**Next:** offline sync (Drift + `POST /sync`), then the CV camera timer.
+**Events.** All seventeen are selectable, timed and tracked, with the
+competition format from WCA Regulations §9b driving the session statistics.
+Twelve have working random-move scramblers (the six NxN cubes, plus the six
+modifier events that reuse their base puzzle's). Megaminx, Pyraminx, Skewb,
+Square-1 and Clock ship with an explicit **"scrambles coming"** state rather
+than a substituted 3×3 scramble — each needs its own notation and, for
+competition legality, a random-state solver.
+
+**Next:** per-puzzle random-state scramblers, offline sync (Drift +
+`POST /sync`), then the CV camera timer.
 Everything behind `kUseFakeData` becomes live the moment the backend answers —
 the real repository implementations are already written against the documented
 contract.

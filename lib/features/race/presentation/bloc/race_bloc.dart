@@ -135,7 +135,7 @@ class RaceBloc extends Bloc<RaceEvent, RaceState> {
       ),
     );
 
-    _gateway.createRace(mode: event.mode.wire);
+    _gateway.createRace(mode: event.mode.wire, event: event.event);
     _startSearchClock();
   }
 

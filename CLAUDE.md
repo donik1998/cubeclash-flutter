@@ -37,16 +37,17 @@ test/
   **/goldens/*.png          goldens live next to their test file
 ```
 
-Current state — **all phases (A–G) complete**, 270 tests green:
+Current state — **all phases (A–H) complete**, 382 tests green:
 
 - **Component library** (`core/widgets`) — built, golden-tested light + dark.
-- **Timer feature** — complete. Local scrambler with move-cancellation rules,
-  `TimerBloc` state machine (inspection +2/DNF boundaries, hold/tap styles),
-  and all three screens (Home, Solve Detail, Session & History).
+- **Timer feature** — complete, across **all 17 WCA events**. Local scrambler
+  with move-cancellation rules (2×2 … 7×7), `TimerBloc` state machine
+  (inspection +2/DNF boundaries, hold/tap styles), and all three screens
+  (Home, Solve Detail, Session & History). See **Event model** below.
 - **Stats feature** — complete. My Stats (PB cards + hand-painted progress and
   distribution charts), Leaderboards (scope/metric filters, cursor paging,
   pinned current-user row), Player Profile with head-to-head.
-- **Race feature** — complete. `RaceBloc` over the `/race` gateway with
+- **Race feature** — complete, event-aware. `RaceBloc` over the `/race` gateway with
   disconnect, reconnect and idempotent-submit handling; lobby (quick/private/
   tournaments), matchmaking modal, ready room, full-screen live race and both
   result states.
@@ -58,6 +59,75 @@ Current state — **all phases (A–G) complete**, 270 tests green:
 
 Backend access is stubbed. Every repository ships a `Fake…` and a real impl;
 `kUseFakeData` in `injection.dart` picks one.
+
+## Event model — all 17 WCA events
+
+Source of truth is **WCA Regulations §9b / §9f**, verified July 2026. The
+regulation numbers are quoted in `event_format.dart` and asserted in
+`test/features/timer/wca_event_test.dart`, so an edit that contradicts them
+fails with a pointer to the authority.
+
+- **`WcaEvent`** (`timer/domain/entities/wca_event.dart`) is the catalogue —
+  seventeen constants, each carrying its id, competition format, result kind,
+  puzzle, notation, icon composition and raceability. Everything else reads
+  from it. `WcaEvent.fromId` is **lenient**: an unknown id falls back to 3×3
+  rather than throwing, because a server that grows an eighteenth event before
+  the client does must not crash the timer.
+- **Event ids extend the ones already in the database** — `3x3`, `4x4`, then
+  `3x3-oh`, `4x4-bld`, `3x3-fmc`, `3x3-mbld`. Not the WCA's `333`/`444` codes:
+  switching would orphan every solve already written.
+- **A scramble is `Scramble`, not `String`.** Lines of tokens, because three
+  notations lose meaning when flattened: **Megaminx** line breaks are semantic
+  (cubers execute it line by line), **Square-1** is slash-separated with no
+  spaces to wrap on, and **Multi-Blind** is N independent scrambles.
+  **The wire format stays a plain string** — newline-separated, exactly what
+  TNoodle emits — so `Solve.scramble`, `POST /solves` and `race:scramble` did
+  not change and the backend does not have to know about notation. The one new
+  guarantee: **`\n` is significant and must round-trip.**
+- **A result is `SolveResult`, not just `timeMs`.** `Solve.timeMs` still means
+  the attempt's duration for every event (FMC and Multi-Blind are timed too),
+  but for those two it is not the *result*: `Solve` gains nullable
+  `moveCount` / `solvedCount` / `attemptedCount`, and `POST /solves` gains
+  three optional fields. Rank on `Solve.rankingValue`, never on `timeMs`.
+  Multi-Blind ranks by **points then time** (9f12) and auto-DNFs below two
+  solved cubes — `SolveResult.compareTo` owns that, not any caller.
+- **Averaging is per-event.** `EventFormat.sessionStats` picks the three cards:
+  3×3 keeps `best · ao5 · ao12`; 6×6/7×7/FMC read `best · mo3 · ao5`;
+  blindfolded reads the same (9b3a ranks on best, 9b3b also recognises a mo3);
+  Multi-Blind reads `best · last · solves` because averaging attempts of
+  different cube counts is meaningless. **The competition format leads and the
+  practice statistic follows** — a solo timer is asked both questions.
+- **`+2` is a time penalty only.** The chip is hidden for FMC and Multi-Blind
+  rather than offered as a button that would lie. **A DNF applies to every
+  event.**
+- **WCA precision (9f1/9f2)** lives in `core/util/time_format.dart`, shared by
+  `TimeText` and the domain's `FormatResult` because neither layer may import
+  the other. Under 10 min → hundredths; 10 min and over, and all Multi-Blind
+  → seconds; an hour and over → `1:04:22`.
+- **Scramblers: twelve of seventeen.** The six NxN cubes, plus the six
+  modifier events which reuse their base puzzle's scrambler. Megaminx,
+  Pyraminx, Skewb, Square-1 and Clock render an explicit **"scrambles coming"**
+  state — each needs its own notation and a random-state solver (roadmap).
+  `GenerateScramble.scrambleFor` returns `Scramble.empty` for those; it never
+  substitutes a 3×3 scramble under another event's label.
+- **Icons compose**: base `PuzzleFamily` shape + `PuzzleModifier` badge, not
+  seventeen bespoke files. Seventeen events are eleven puzzles and five
+  disciplines, and `3BLD` should read as a 3×3 because it is one. The
+  domain↔widget mapping lives in `event_picker_sheet.dart` (`shapeFor` /
+  `badgeFor`), since `core/widgets` must not know about events and the domain
+  must not import Flutter.
+- **FMC and Multi-Blind enter their result by hand** (`ManualResultSheet`).
+  FMC disables the touch surface entirely — there is no stopwatch result to
+  capture. Multi-Blind stops the clock, then asks, and **does not write the
+  solve until it is answered**: a Multi-Blind row without its cube counts is
+  not a partial record, it is a meaningless one.
+- **Raceable events** are every NxN plus One-Handed. Blindfolded is excluded
+  because the memorisation phase is inside the timed attempt and nothing on
+  screen can tell it from stalling; FMC and Multi-Blind because their results
+  are not a clock. **Quick match is narrower still** — 2×2, 3×3, OH — because
+  a `6x6 quick match` queue is realistically empty; everything else raceable is
+  private-room only. The fake gateway's opponent pace and progress cadence
+  scale with the event (10 Hz short, 4 Hz long).
 
 ## Conventions
 
@@ -139,25 +209,25 @@ Claude Code configuration for this repo:
 
 ## Pending work — prompts
 
-Two pieces are specced but not built. Each is written to be pasted into a fresh
-session (see §9 of `IMPLEMENTATION_PROMPT.md` — one phase per session):
+One piece is specced but not built, written to be pasted into a fresh session
+(see §9 of `IMPLEMENTATION_PROMPT.md` — one phase per session):
 
 - **`PROMPT_RACE_FIGMA.md`** — the Race screens were built before the Figma MCP
   was reachable and don't match the frames. Live Race in particular is a
   different screen (two side-by-side player cards with `VS`, no hero timer, no
   progress bars). Presentation layer only; `RaceBloc` stays as-is.
-- **`PROMPT_WCA_EVENTS.md`** — support all 17 official WCA events. This is a
-  domain-model task before a UI one: a scramble stops being a space-separated
-  string (Megaminx line breaks are semantic, Square-1 is slash-separated pairs,
-  Multi-Blind is N scrambles), a result stops being a sub-minute time (FMC is a
-  move count, Multi-Blind runs to an hour), and averaging becomes per-event
-  (Mo3 for 6×6/7×7, Bo3 for blindfolded). Requires a proposal before code.
+
+**`PROMPT_WCA_EVENTS.md` is done** — see **Event model** above. What it
+deliberately scoped out is the next piece of work: per-puzzle **random-state**
+scramblers for Megaminx, Pyraminx, Skewb, Square-1 and Clock, each of which
+needs its own notation and, for competition legality, a solver.
 
 ## Roadmap (post-MVP)
 
 CV camera timer (flagship v1.1, doubles as PvP anti-cheat), full offline sync,
-ranked matchmaking (Elo/Glicko), tournaments, more events, daily challenge,
-native v2, smart-cube (BLE).
+ranked matchmaking (Elo/Glicko), tournaments, random-state WCA-legal
+scramblers for the five remaining puzzles, daily challenge, native v2,
+smart-cube (BLE).
 
 ## Don'ts
 

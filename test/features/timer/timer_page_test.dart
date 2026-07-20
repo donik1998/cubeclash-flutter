@@ -4,6 +4,7 @@ import 'package:cubeclash/features/profile/domain/repositories/profile_repositor
 import 'package:cubeclash/features/profile/presentation/cubit/settings_cubit.dart';
 import 'package:cubeclash/core/router/immersive_controller.dart';
 import 'package:cubeclash/features/timer/domain/entities/penalty.dart';
+import 'package:cubeclash/features/timer/domain/entities/scramble.dart';
 import 'package:cubeclash/features/timer/domain/entities/solve.dart';
 import 'package:cubeclash/features/timer/presentation/bloc/timer_bloc.dart';
 import 'package:cubeclash/features/timer/presentation/pages/timer_page.dart';
@@ -52,14 +53,17 @@ void main() {
     await tester.pump();
   }
 
-  const String scramble = "R U R' U' F2 D B L2 F R' D2 U B2 L F' R2 D' L B U2";
+  final Scramble scramble = Scramble.parse(
+    "R U R' U' F2 D B L2 F R' D2 U B2 L F' R2 D' L B U2",
+    ScrambleNotation.faceTurns,
+  );
 
   group('idle', () {
     testWidgets('shows scramble, prompt and empty-session copy',
         (WidgetTester tester) async {
       await pumpWithState(
         tester,
-        const TimerState(scramble: scramble),
+        TimerState(scramble: scramble),
       );
 
       // Figma `Timer Home`: scramble-source segments, the scramble itself,
@@ -67,7 +71,7 @@ void main() {
       expect(find.text('Random'), findsOneWidget);
       expect(find.text('WCA comps'), findsOneWidget);
       expect(find.text('Last used'), findsOneWidget);
-      expect(find.text(scramble), findsOneWidget);
+      expect(find.text(scramble.text), findsOneWidget);
       expect(find.text('Random scramble'), findsOneWidget);
       expect(find.text('New'), findsOneWidget);
 
@@ -83,7 +87,7 @@ void main() {
 
     testWidgets('penalty controls are absent before any solve',
         (WidgetTester tester) async {
-      await pumpWithState(tester, const TimerState(scramble: scramble));
+      await pumpWithState(tester, TimerState(scramble: scramble));
 
       // The frame shows no penalty row at idle — there is nothing to penalise,
       // so it isn't rendered at all rather than rendered and dimmed.
@@ -96,10 +100,10 @@ void main() {
         (WidgetTester tester) async {
       await pumpWithState(
         tester,
-        const TimerState(
+        TimerState(
           status: TimerStatus.inspecting,
           scramble: scramble,
-          inspectionElapsed: Duration(seconds: 3),
+          inspectionElapsed: const Duration(seconds: 3),
         ),
       );
 
@@ -136,16 +140,16 @@ void main() {
         (WidgetTester tester) async {
       await pumpWithState(
         tester,
-        const TimerState(
+        TimerState(
           status: TimerStatus.running,
           scramble: scramble,
-          elapsed: Duration(milliseconds: 8420),
+          elapsed: const Duration(milliseconds: 8420),
         ),
       );
 
       expect(find.text('8.42'), findsOneWidget);
       expect(find.text('SCRAMBLE'), findsNothing);
-      expect(find.text(scramble), findsNothing);
+      expect(find.text(scramble.text), findsNothing);
       expect(find.text('History'), findsNothing);
     });
 
@@ -175,7 +179,7 @@ void main() {
           lastSolve: Solve(
             id: 'c1',
             event: '3x3',
-            scramble: scramble,
+            scramble: scramble.text,
             timeMs: 12340,
             solvedAt: DateTime(2026, 7, 19),
             penalty: Penalty.plus2,
@@ -199,7 +203,7 @@ void main() {
           Solve(
             id: 's$i',
             event: '3x3',
-            scramble: scramble,
+            scramble: scramble.text,
             timeMs: 10000 + i * 1000,
             solvedAt: DateTime(2026, 7, 19, 10, i),
           ),

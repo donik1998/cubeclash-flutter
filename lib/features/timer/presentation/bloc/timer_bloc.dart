@@ -8,13 +8,18 @@ import '../../../../core/error/failures.dart';
 import '../../../../core/error/result.dart';
 import '../../../../core/util/ticker.dart';
 import '../../domain/entities/penalty.dart';
+import '../../domain/entities/event_format.dart';
+import '../../domain/entities/scramble.dart';
 import '../../domain/entities/scramble_source.dart';
 import '../../domain/entities/solve.dart';
+import '../../domain/entities/solve_result.dart';
 import '../../domain/entities/timer_preferences.dart';
+import '../../domain/entities/wca_event.dart';
 import '../../domain/repositories/solve_repository.dart';
 import '../../domain/usecases/compute_averages.dart';
 import '../../domain/usecases/generate_scramble.dart';
 import '../../domain/usecases/grade_inspection.dart';
+import '../../domain/usecases/session_statistics.dart';
 
 part 'timer_event.dart';
 part 'timer_state.dart';
@@ -64,6 +69,16 @@ class TimerBloc extends Bloc<TimerEvent, TimerState> {
     on<TimerEventChanged>(_onEventChanged);
     on<TimerPenaltyChanged>(_onPenaltyChanged);
     on<TimerPreferencesChanged>(_onPreferencesChanged);
+    on<TimerManualResultSubmitted>(_onManualResult);
+    on<TimerManualResultCancelled>(
+      (TimerManualResultCancelled _, Emitter<TimerState> emit) => emit(
+        state.copyWith(
+          awaitingManualResult: false,
+          status: TimerStatus.idle,
+          elapsed: Duration.zero,
+        ),
+      ),
+    );
     on<TimerSessionCleared>(_onSessionCleared);
     on<TimerFailureDismissed>(
       (TimerFailureDismissed _, Emitter<TimerState> emit) =>
@@ -117,6 +132,12 @@ class TimerBloc extends Bloc<TimerEvent, TimerState> {
     TimerPressedDown event,
     Emitter<TimerState> emit,
   ) async {
+    // Fewest Moves has no timed result, so the whole-screen touch surface does
+    // not apply — the screen offers a move-count field instead, and a stray
+    // press must not start a stopwatch that means nothing.
+    if (state.eventSpec.isManualEntry) return;
+    if (state.awaitingManualResult) return;
+
     switch (state.status) {
       case TimerStatus.running:
         // Stop on press, not release — a solve ends the instant the hands land.
@@ -158,6 +179,7 @@ class TimerBloc extends Bloc<TimerEvent, TimerState> {
     TimerPressedUp event,
     Emitter<TimerState> emit,
   ) async {
+    if (state.eventSpec.isManualEntry || state.awaitingManualResult) return;
     if (_swallowNextRelease) {
       _swallowNextRelease = false;
       return;
@@ -319,31 +341,68 @@ class TimerBloc extends Bloc<TimerEvent, TimerState> {
         ? _grade(state.inspectionElapsed)
         : Penalty.none;
 
+    // Multi-Blind stops the clock without knowing the result: `54:22` is not a
+    // result until the `11/13` is beside it. Hold the time on screen, ask, and
+    // write the solve when the answer comes back — a Multi-Blind row missing
+    // its cube counts is not a partial record, it is a meaningless one.
+    if (state.eventSpec.resultKind == ResultKind.multiBlind) {
+      emit(
+        state.copyWith(
+          status: TimerStatus.stopped,
+          elapsed: finalTime,
+          holdProgress: 0,
+          awaitingManualResult: true,
+        ),
+      );
+      return;
+    }
+
+    await _recordSolve(emit,
+        timeMs: finalTime.inMilliseconds, penalty: penalty);
+  }
+
+  /// Writes a finished attempt — the single path every event records through.
+  ///
+  /// Shared by the stopwatch ([_stopSolve]) and by hand-entered results
+  /// ([_onManualResult]) so the optimistic update, the analytics event and the
+  /// failure handling cannot drift apart between them.
+  Future<void> _recordSolve(
+    Emitter<TimerState> emit, {
+    required int timeMs,
+    required Penalty penalty,
+    int? moveCount,
+    int? solvedCount,
+    int? attemptedCount,
+  }) async {
     final DateTime solvedAt = DateTime.now();
     final String clientId = _idFactory();
 
-    // Show the finished time immediately. Persistence is async and must never
-    // make the user wait to see what they just did.
+    // Show the finished result immediately. Persistence is async and must
+    // never make the user wait to see what they just did.
     final Solve optimistic = Solve(
       id: clientId,
       event: state.event,
-      scramble: state.scramble,
-      timeMs: finalTime.inMilliseconds,
+      scramble: state.scramble.text,
+      timeMs: timeMs,
       solvedAt: solvedAt,
       penalty: penalty,
+      moveCount: moveCount,
+      solvedCount: solvedCount,
+      attemptedCount: attemptedCount,
     );
 
     emit(
       state.copyWith(
         status: TimerStatus.stopped,
-        elapsed: finalTime,
+        elapsed: Duration(milliseconds: timeMs),
         holdProgress: 0,
         lastSolve: optimistic,
         isSaving: true,
-        // A fresh scramble is proposed after every completed solve; the one
+        awaitingManualResult: false,
+        // A fresh scramble is proposed after every completed attempt; the one
         // just solved becomes what `Last used` re-serves.
         scramble: _newScramble(state.event),
-        previousScramble: optimistic.scramble,
+        previousScramble: state.scramble,
       ),
     );
 
@@ -351,20 +410,27 @@ class TimerBloc extends Bloc<TimerEvent, TimerState> {
       'solve_completed',
       properties: <String, Object?>{
         'event': state.event,
-        'time_ms': finalTime.inMilliseconds,
+        'time_ms': timeMs,
         'penalty': penalty.name,
+        'result_kind': state.eventSpec.resultKind.name,
+        if (moveCount != null) 'move_count': moveCount,
+        if (solvedCount != null) 'solved_count': solvedCount,
+        if (attemptedCount != null) 'attempted_count': attemptedCount,
         // Deliberately absent: `is_pb`. The server owns it (docs → API Design)
         // and the client must not guess it.
       },
     );
 
     final Result<Solve> result = await _repository.addSolve(
-      event: state.event,
+      event: optimistic.event,
       scramble: optimistic.scramble,
       timeMs: optimistic.timeMs,
       penalty: penalty,
       solvedAt: solvedAt,
       clientId: clientId,
+      moveCount: moveCount,
+      solvedCount: solvedCount,
+      attemptedCount: attemptedCount,
     );
 
     if (isClosed) return;
@@ -373,21 +439,51 @@ class TimerBloc extends Bloc<TimerEvent, TimerState> {
       case Ok<Solve>(:final Solve value):
         emit(state.copyWith(lastSolve: value, isSaving: false));
       case Err<Solve>(:final Failure failure):
-        // The time stays on screen — a failed write loses the record, not the
-        // user's solve.
+        // The result stays on screen — a failed write loses the record, not
+        // the user's attempt.
         emit(state.copyWith(isSaving: false, failure: failure));
     }
   }
 
+  /// A result the stopwatch could not produce — see
+  /// [TimerManualResultSubmitted].
+  Future<void> _onManualResult(
+    TimerManualResultSubmitted event,
+    Emitter<TimerState> emit,
+  ) async {
+    // Fewest Moves is not timed against the clock, so an attempt with no
+    // measured duration is normal and records as zero rather than being
+    // rejected.
+    final int timeMs = event.timeMs ?? state.elapsed.inMilliseconds;
+
+    await _recordSolve(
+      emit,
+      timeMs: timeMs,
+      // A `+2` is an inspection penalty on a timed solve. Neither of these
+      // events has one, so nothing can be carried in from the timer here.
+      penalty: Penalty.none,
+      moveCount: event.moveCount,
+      solvedCount: event.solvedCount,
+      attemptedCount: event.attemptedCount,
+    );
+  }
+
   // --- Scramble & event ------------------------------------------------------
 
-  String _newScramble(String event) {
-    final String scramble = _generateScramble(event);
+  /// A fresh scramble for [eventId].
+  ///
+  /// Returns [Scramble.empty] for an event with no scrambler yet, which the
+  /// card renders as an explicit "scrambles coming" state rather than a
+  /// silently substituted 3×3 scramble.
+  Scramble _newScramble(String eventId) {
+    final WcaEvent event = WcaEvent.fromId(eventId);
+    final Scramble scramble = _generateScramble.scrambleFor(event);
     _analytics.capture(
       'scramble_generated',
       properties: <String, Object?>{
-        'event': event,
+        'event': eventId,
         'source': state.scrambleSource.wire,
+        'available': event.hasScrambler,
       },
     );
     return scramble;
@@ -414,7 +510,7 @@ class TimerBloc extends Bloc<TimerEvent, TimerState> {
           ),
         );
       case ScrambleSource.reused:
-        final String? previous = state.previousScramble;
+        final Scramble? previous = state.previousScramble;
         emit(
           state.copyWith(
             scrambleSource: event.source,
@@ -439,6 +535,15 @@ class TimerBloc extends Bloc<TimerEvent, TimerState> {
 
   void _onEventChanged(TimerEventChanged event, Emitter<TimerState> emit) {
     if (event.event == state.event) return;
+
+    // Most-recent-first, no duplicates, capped — this feeds the picker's
+    // `Recent` group, and a list longer than the group can show is just memory
+    // nobody reads.
+    final List<String> recents = <String>[
+      event.event,
+      ...state.recentEvents.where((String id) => id != event.event),
+    ].take(5).toList();
+
     emit(
       state.copyWith(
         event: event.event,
@@ -446,6 +551,8 @@ class TimerBloc extends Bloc<TimerEvent, TimerState> {
         status: TimerStatus.idle,
         elapsed: Duration.zero,
         inspectionElapsed: Duration.zero,
+        awaitingManualResult: false,
+        recentEvents: recents,
         clearLastSolve: true,
       ),
     );

@@ -13,7 +13,13 @@ import '../../../profile/domain/entities/app_settings.dart';
 import '../../../profile/presentation/cubit/settings_cubit.dart';
 import '../../domain/entities/penalty.dart';
 import '../../domain/entities/scramble_source.dart';
+import '../../domain/entities/solve_result.dart';
+import '../../domain/entities/wca_event.dart';
+import '../../domain/usecases/format_result.dart';
+import '../../domain/usecases/session_statistics.dart';
 import '../bloc/timer_bloc.dart';
+import '../widgets/event_picker_sheet.dart';
+import '../widgets/manual_result_sheet.dart';
 import '../widgets/penalty_controls.dart';
 import '../widgets/scramble_card.dart';
 import '../widgets/timer_readout.dart';
@@ -86,7 +92,8 @@ class _TimerViewState extends State<_TimerView> {
       listenWhen: (TimerState a, TimerState b) =>
           a.isImmersive != b.isImmersive ||
           a.failure != b.failure ||
-          a.status != b.status,
+          a.status != b.status ||
+          a.awaitingManualResult != b.awaitingManualResult,
       listener: _onStateChanged,
       builder: (BuildContext context, TimerState state) {
         final TimerBloc bloc = context.read<TimerBloc>();
@@ -114,6 +121,11 @@ class _TimerViewState extends State<_TimerView> {
 
   void _onStateChanged(BuildContext context, TimerState state) {
     _immersive.set(state.isImmersive);
+
+    // Multi-Blind stops the clock without knowing its result. Ask immediately
+    // rather than leaving a finished attempt sitting unrecorded — an hour of
+    // work is not something to make the user remember to file.
+    if (state.awaitingManualResult) _openManualSheet(context, state);
 
     if (state.preferences.hapticsEnabled) {
       switch (state.status) {
@@ -143,6 +155,23 @@ class _TimerViewState extends State<_TimerView> {
           ),
         );
     }
+  }
+
+  void _openManualSheet(BuildContext context, TimerState state) {
+    final TimerBloc bloc = context.read<TimerBloc>();
+    ManualResultSheet.show(
+      context,
+      event: state.eventSpec,
+      elapsedMs: state.elapsed.inMilliseconds,
+      onSubmit: (ManualResult result) => bloc.add(
+        TimerManualResultSubmitted(
+          moveCount: result.moveCount,
+          solvedCount: result.solvedCount,
+          attemptedCount: result.attemptedCount,
+        ),
+      ),
+      onCancel: () => bloc.add(const TimerManualResultCancelled()),
+    );
   }
 }
 
@@ -187,7 +216,8 @@ class _IdleBody extends StatelessWidget {
           Row(
             children: <Widget>[
               _EventChip(
-                event: state.event,
+                event: state.eventSpec,
+                recents: state.recentEvents,
                 onChanged: (String next) => bloc.add(TimerEventChanged(next)),
               ),
               const Spacer(),
@@ -205,17 +235,28 @@ class _IdleBody extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           ScrambleCard(
             scramble: state.scramble,
+            event: state.eventSpec,
             source: state.scrambleSource,
             onNewScramble: () => bloc.add(const TimerScrambleRequested()),
             onSourceChanged: (ScrambleSource source) =>
                 bloc.add(TimerScrambleSourceChanged(source)),
           ),
           Expanded(child: Center(child: TimerReadout(state: state))),
+          // Fewest Moves has no stopwatch, so the screen offers the one action
+          // it does have instead of a touch surface that would do nothing.
+          if (state.eventSpec.isManualEntry) ...<Widget>[
+            AppButton(
+              label: hasSolve ? 'Record another' : 'Record result',
+              onPressed: () => _recordManually(context, state),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
           // Only after a solve — see the class doc.
-          if (hasSolve) ...<Widget>[
+          if (hasSolve && !state.awaitingManualResult) ...<Widget>[
             PenaltyControls(
               penalty: state.lastSolve?.penalty ?? Penalty.none,
               enabled: true,
+              showPlus2: state.lastSolve?.result.supportsPlus2 ?? true,
               onChanged: (Penalty penalty) =>
                   bloc.add(TimerPenaltyChanged(penalty)),
             ),
@@ -226,9 +267,31 @@ class _IdleBody extends StatelessWidget {
       ),
     );
   }
+
+  void _recordManually(BuildContext context, TimerState state) {
+    final TimerBloc bloc = context.read<TimerBloc>();
+    ManualResultSheet.show(
+      context,
+      event: state.eventSpec,
+      elapsedMs: state.elapsed.inMilliseconds,
+      onSubmit: (ManualResult result) => bloc.add(
+        TimerManualResultSubmitted(
+          moveCount: result.moveCount,
+          solvedCount: result.solvedCount,
+          attemptedCount: result.attemptedCount,
+        ),
+      ),
+      onCancel: () {},
+    );
+  }
 }
 
-/// Three cards: best · ao5 · ao12 — Figma `21:76`.
+/// Three cards — Figma `21:76`.
+///
+/// **Which** three is the event's decision, not this widget's: the competition
+/// format picks them (`EventFormat.sessionStats`), so a 3×3 still reads
+/// `best · ao5 · ao12` exactly as the frame drew it, while a 6×6 reads
+/// `best · mo3 · ao5` and Multi-Blind reads `best · last · solves`.
 ///
 /// Value over label, left-aligned, radius 14. Tapping opens history, which the
 /// frame implies by giving them card affordance rather than plain text.
@@ -239,35 +302,44 @@ class _SessionStats extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    String? fmt(int? ms) => ms == null ? null : TimeText.format(ms);
+    final List<SessionStatValue> stats = state.sessionStats;
 
     return Row(
       children: <Widget>[
-        Expanded(
-          child: _MiniStat(
-            label: 'best',
-            value: fmt(state.sessionBest),
-            onTap: () => context.push('/timer/history'),
+        for (int i = 0; i < stats.length; i++) ...<Widget>[
+          if (i > 0) const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: _MiniStat(
+              label: stats[i].stat.label,
+              value: _format(stats[i]),
+              onTap: () => context.push('/timer/history'),
+            ),
           ),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: _MiniStat(
-            label: 'ao5',
-            value: fmt(state.sessionAo5),
-            onTap: () => context.push('/timer/history'),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: _MiniStat(
-            label: 'ao12',
-            value: fmt(state.sessionAo12),
-            onTap: () => context.push('/timer/history'),
-          ),
-        ),
+        ],
       ],
     );
+  }
+
+  /// Formats a card by what it *is*, not by assuming milliseconds.
+  static String? _format(SessionStatValue stat) {
+    // A tally is a tally — zero solves is a real answer, not "not yet".
+    if (stat.isCount) return '${stat.value ?? 0}';
+
+    // `best` and `last` point at a specific attempt, so they render the whole
+    // result: `11/13 in 54:22` cannot be rebuilt from one integer, and a DNF
+    // should read as `DNF` rather than vanish.
+    final SolveResult? result = stat.result;
+    if (result != null) return FormatResult.display(result);
+
+    final int? value = stat.value;
+    if (value == null) return null;
+
+    return switch (stat.kind) {
+      // An average of move counts is rarely a whole number, and the WCA
+      // records it to two decimals.
+      ResultKind.moveCount => FormatResult.formatMovesMean(value.toDouble()),
+      _ => FormatResult.formatTime(value),
+    };
   }
 }
 
@@ -338,22 +410,22 @@ class _MiniStat extends StatelessWidget {
   }
 }
 
-/// Opens the event picker. 3×3 is the only MVP event; the sheet lists the
-/// others disabled so the roadmap is visible without pretending it's built.
+/// Opens the event picker.
+///
+/// All seventeen events are selectable — see [EventPickerSheet] for how the
+/// list is grouped and why nothing is disabled. The chip shows the event's
+/// composed icon beside its short name, so the current event is identifiable
+/// without reading.
 class _EventChip extends StatelessWidget {
-  const _EventChip({required this.event, required this.onChanged});
+  const _EventChip({
+    required this.event,
+    required this.recents,
+    required this.onChanged,
+  });
 
-  final String event;
+  final WcaEvent event;
+  final List<String> recents;
   final ValueChanged<String> onChanged;
-
-  /// Events the scrambler can actually produce (see `PuzzleSpec.byEvent`).
-  static const List<String> _available = <String>['3x3', '4x4'];
-
-  static const List<String> _comingSoon = <String>[
-    '2x2',
-    'pyraminx',
-    'megaminx',
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -363,17 +435,22 @@ class _EventChip extends StatelessWidget {
     // rather than a static badge.
     return Semantics(
       button: true,
-      label: 'Event: ${_pretty(event)}',
+      label: 'Event: ${event.name}',
       excludeSemantics: true,
       child: Material(
         color: colors.brandPrimarySoft,
         borderRadius: BorderRadius.circular(AppRadius.pill),
         child: InkWell(
-          onTap: () => _openPicker(context),
+          onTap: () => EventPickerSheet.show(
+            context,
+            selected: event.id,
+            recents: recents,
+            onSelected: onChanged,
+          ),
           borderRadius: BorderRadius.circular(AppRadius.pill),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
+              AppSpacing.md,
               AppSpacing.md,
               AppSpacing.md,
               AppSpacing.md,
@@ -381,8 +458,14 @@ class _EventChip extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
+                EventIcon(
+                  event: event,
+                  size: 16,
+                  color: colors.brandPrimary,
+                ),
+                const SizedBox(width: AppSpacing.sm),
                 Text(
-                  _pretty(event),
+                  event.shortName,
                   style: AppTypography.label.copyWith(
                     color: colors.brandPrimary,
                     fontWeight: FontWeight.w600,
@@ -397,70 +480,6 @@ class _EventChip extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  static String _pretty(String event) => switch (event) {
-        '2x2' => '2×2',
-        '3x3' => '3×3',
-        '4x4' => '4×4',
-        _ => event,
-      };
-
-  void _openPicker(BuildContext context) {
-    final AppColors colors = context.colors;
-
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: colors.bgSurface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
-      ),
-      builder: (BuildContext sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Text(
-                'Event',
-                style: AppTypography.title.copyWith(color: colors.textPrimary),
-              ),
-            ),
-            for (final String available in _available)
-              ListTile(
-                leading: CubeFaceIcon.forEvent(
-                  available,
-                  active: available == event,
-                ),
-                title: Text(_pretty(available), style: AppTypography.body),
-                trailing: available == event
-                    ? Icon(Icons.check, color: colors.brandPrimary)
-                    : null,
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  onChanged(available);
-                },
-              ),
-            for (final String other in _comingSoon)
-              ListTile(
-                enabled: false,
-                leading: CubeFaceIcon.forEvent(other),
-                title: Text(
-                  _pretty(other),
-                  style: AppTypography.body.copyWith(color: colors.textMuted),
-                ),
-                trailing: Text(
-                  'Soon',
-                  style:
-                      AppTypography.caption.copyWith(color: colors.textMuted),
-                ),
-              ),
-            const SizedBox(height: AppSpacing.lg),
-          ],
         ),
       ),
     );

@@ -136,6 +136,125 @@ class AppTypography {
     fontWeight: FontWeight.w500,
   );
 
+  /// Medium 16/24 — the scramble at 4×4/5×5 length.
+  ///
+  /// Not in the Figma frame, which only ever showed a 3×3. Added here rather
+  /// than inline because the ramp is a rule, not a one-off: a 5×5 scramble is
+  /// three times a 3×3's length and at 19/28 it pushes the timer off screen.
+  /// Derived from [scramble] on the same 1.47 line-height ratio so the two
+  /// read as one style at two sizes.
+  static const TextStyle scrambleCompact = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 16,
+    height: 24 / 16,
+    fontWeight: FontWeight.w500,
+  );
+
+  /// Medium 13/19 — the scramble at 6×6/7×7/Megaminx length.
+  ///
+  /// The floor of the ramp. Below this a scramble stops being readable at
+  /// arm's length, which is the only reason the card exists — so the card
+  /// collapses and offers an expander instead of shrinking further.
+  static const TextStyle scrambleDense = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 13,
+    height: 19 / 13,
+    fontWeight: FontWeight.w500,
+  );
+
+  // --- Race ------------------------------------------------------------------
+  // Off the standard scale, taken from the Race frames. The versus screens are
+  // the one place two numbers are read side by side and compared at a glance,
+  // so they get their own sizes rather than borrowing the solo timer's.
+
+  /// ExtraBold 30 — a lobby screen title (Figma `33:111`).
+  ///
+  /// The tab screens title themselves in the body rather than in an app bar,
+  /// which is why this sits between [h1] and [h2] instead of reusing either.
+  static const TextStyle screenTitle = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 30,
+    fontWeight: FontWeight.w800,
+  );
+
+  /// Bold 20 — a lobby hero card's title (Figma `33:123`).
+  static const TextStyle heroTitle = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 20,
+    fontWeight: FontWeight.w700,
+  );
+
+  /// SemiBold 13 — pill labels: the Elo chip, a rival's Race button
+  /// (Figma `33:113`).
+  static const TextStyle pillLabel = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 13,
+    fontWeight: FontWeight.w600,
+  );
+
+  /// Bold 12, +12% tracking — the `LIVE RACE` overline (Figma `34:147`).
+  ///
+  /// Heavier and wider-tracked than [overline]: it is a status, not a section
+  /// heading, and it is the only thing on the screen rendered in `status/danger`.
+  static const TextStyle liveOverline = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 12,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 1.44,
+  );
+
+  /// SemiBold 15 — a player's name on a versus card (Figma `34:152`).
+  static const TextStyle versusName = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 15,
+    fontWeight: FontWeight.w600,
+  );
+
+  /// Bold 30 — a player's clock on a versus card (Figma `34:154`).
+  ///
+  /// Both players' clocks render at this size. That equality is the whole
+  /// point of the screen: neither time is the hero, which is what makes it
+  /// read as a race rather than as your timer with a footnote.
+  static const TextStyle versusTime = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 30,
+    fontWeight: FontWeight.w700,
+    fontFeatures: _tabularFigures,
+  );
+
+  /// Bold 18 — the `VS` between the two cards (Figma `34:156`).
+  static const TextStyle versusJoin = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 18,
+    fontWeight: FontWeight.w700,
+  );
+
+  /// Medium 16 — the prompt filling the lower half of a race screen, e.g.
+  /// `Tap anywhere to stop` (Figma `34:166`).
+  static const TextStyle stagePrompt = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 16,
+    fontWeight: FontWeight.w500,
+  );
+
+  /// ExtraBold 46 — `YOU WIN` / `YOU LOSE` (Figma `34:193`).
+  static const TextStyle resultHeadline = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 46,
+    fontWeight: FontWeight.w800,
+  );
+
+  /// ExtraBold 26 — a private room's shareable code (Figma `33:207`).
+  ///
+  /// Tabular: the code is read aloud and typed in character by character, so
+  /// even letter-spacing matters more than tight fitting.
+  static const TextStyle roomCode = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 26,
+    fontWeight: FontWeight.w800,
+    fontFeatures: _tabularFigures,
+  );
+
   /// SemiBold 11/16, +8% tracking — section eyebrows (`SCRAMBLE`).
   static const TextStyle overline = TextStyle(
     fontFamily: fontFamily,

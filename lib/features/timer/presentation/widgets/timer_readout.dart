@@ -5,7 +5,9 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../domain/entities/penalty.dart';
+import '../../domain/entities/solve_result.dart';
 import '../../domain/entities/timer_preferences.dart';
+import '../../domain/usecases/format_result.dart';
 import '../../domain/usecases/grade_inspection.dart';
 import '../bloc/timer_bloc.dart';
 
@@ -15,7 +17,20 @@ import '../bloc/timer_bloc.dart';
 ///   * **inspecting** — the inspection countdown, colour-shifting as the WCA
 ///     penalty boundaries approach, so the user sees the +2 coming.
 ///   * **ready** — the last time, in `statusSuccess`: armed, release to go.
-///   * **running / stopped / idle** — the solve time.
+///   * **running / stopped / idle** — the attempt's result.
+///
+/// ## Why the hero scales
+///
+/// [AppTypography.timerHero] is 78px, sized in Figma against `0.00` — four
+/// glyphs. The seventeen-event set routinely produces more: `5:23.45` is
+/// seven, a Multi-Blind `58:12` plus its `11/13` is a whole phrase. At 78px
+/// tabular Noto Serif anything past six glyphs overruns the content width.
+///
+/// So the numerals live in a [FittedBox] that scales **down** to fit and never
+/// up: a 3×3 still renders at exactly the frame's 78px, and a long result
+/// shrinks to fit rather than clipping or wrapping. Scaling is the right
+/// failure here — a smaller readable time beats a correctly-sized one with its
+/// hundredths off screen.
 class TimerReadout extends StatelessWidget {
   const TimerReadout({super.key, required this.state});
 
@@ -28,7 +43,11 @@ class TimerReadout extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        _numerals(context, colors),
+        // Scale down to the available width, never up — see the class doc.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: _numerals(context, colors),
+        ),
         const SizedBox(height: AppSpacing.md),
         _StateLabel(state: state),
       ],
@@ -41,13 +60,28 @@ class TimerReadout extends StatelessWidget {
     }
 
     final bool armed = state.status == TimerStatus.ready;
+    final bool showResult = state.status == TimerStatus.stopped;
+
+    // Once an attempt is finished, render the event's own result — a move
+    // count for Fewest Moves, `11/13 in 54:22` for Multi-Blind — rather than
+    // the elapsed clock, which for those two is not the result at all.
+    final SolveResult? result = showResult ? state.lastSolve?.result : null;
+    if (result != null && result.kind != ResultKind.time) {
+      return Text(
+        FormatResult.display(result),
+        style: AppTypography.timerHero.copyWith(
+          color: result.isDnf ? colors.statusDanger : colors.textPrimary,
+        ),
+        semanticsLabel: FormatResult.semanticsFor(result),
+      );
+    }
+
     final Penalty penalty = state.lastSolve?.penalty ?? Penalty.none;
-    final bool showPenalty = state.status == TimerStatus.stopped;
 
     return TimeText(
       timeMs: state.elapsed.inMilliseconds,
-      isPlus2: showPenalty && penalty == Penalty.plus2,
-      isDnf: showPenalty && penalty == Penalty.dnf,
+      isPlus2: showResult && penalty == Penalty.plus2,
+      isDnf: showResult && penalty == Penalty.dnf,
       style: AppTypography.timerHero,
       // Green while armed is the single most important affordance on this
       // screen: it is what tells the user the release will start the timer.
@@ -113,6 +147,12 @@ class _StateLabel extends StatelessWidget {
     final (String label, Color color) = switch (status) {
       // The frame shows a green dot at idle: the timer is ready, which is a
       // more useful thing to signal than "inactive".
+      // Fewest Moves has no stopwatch to hold — the label must not promise an
+      // interaction the screen does not offer.
+      TimerStatus.idle when state.eventSpec.isManualEntry => (
+          'Record when you are done',
+          colors.statusSuccess,
+        ),
       TimerStatus.idle => (
           state.preferences.style == TimerStyle.hold
               ? 'Hold to start'
@@ -127,6 +167,14 @@ class _StateLabel extends StatelessWidget {
         ),
       TimerStatus.ready => ('Release to start', colors.statusSuccess),
       TimerStatus.running => ('Solving', colors.accentEnergy),
+      TimerStatus.stopped when state.awaitingManualResult => (
+          'Enter your result',
+          colors.brandPrimary,
+        ),
+      TimerStatus.stopped when state.eventSpec.isManualEntry => (
+          'Recorded',
+          colors.textMuted,
+        ),
       TimerStatus.stopped => ('Tap to reset', colors.textMuted),
     };
 

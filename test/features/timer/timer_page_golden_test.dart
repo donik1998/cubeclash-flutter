@@ -3,6 +3,7 @@ import 'package:cubeclash/core/di/injection.dart';
 import 'package:cubeclash/features/profile/domain/repositories/profile_repository.dart';
 import 'package:cubeclash/features/profile/presentation/cubit/settings_cubit.dart';
 import 'package:cubeclash/features/timer/domain/entities/penalty.dart';
+import 'package:cubeclash/features/timer/domain/entities/scramble.dart';
 import 'package:cubeclash/features/timer/domain/entities/solve.dart';
 import 'package:cubeclash/features/timer/presentation/bloc/timer_bloc.dart';
 import 'package:cubeclash/features/timer/presentation/pages/timer_page.dart';
@@ -36,7 +37,10 @@ void main() {
 
   tearDown(resetDependencies);
 
-  const String scramble = "R U R' U' F2 D B L2 F R' D2 U B2 L F' R2 D' L B U2";
+  final Scramble scramble = Scramble.parse(
+    "R U R' U' F2 D B L2 F R' D2 U B2 L F' R2 D' L B U2",
+    ScrambleNotation.faceTurns,
+  );
   const Size phone = Size(390, 780);
 
   List<Solve> sessionOf(List<int> timesMs) => <Solve>[
@@ -44,7 +48,7 @@ void main() {
           Solve(
             id: 's$i',
             event: '3x3',
-            scramble: scramble,
+            scramble: scramble.text,
             timeMs: timesMs[i],
             solvedAt: DateTime(2026, 7, 19, 10, i),
           ),
@@ -88,7 +92,7 @@ void main() {
   testWidgets('idle with an empty session', (WidgetTester tester) async {
     await goldenFor(
       tester,
-      const TimerState(scramble: scramble),
+      TimerState(scramble: scramble),
       name: 'idle_empty',
     );
   });
@@ -96,10 +100,10 @@ void main() {
   testWidgets('inspecting', (WidgetTester tester) async {
     await goldenFor(
       tester,
-      const TimerState(
+      TimerState(
         status: TimerStatus.inspecting,
         scramble: scramble,
-        inspectionElapsed: Duration(seconds: 7),
+        inspectionElapsed: const Duration(seconds: 7),
       ),
       name: 'inspecting',
     );
@@ -108,10 +112,10 @@ void main() {
   testWidgets('running is bare', (WidgetTester tester) async {
     await goldenFor(
       tester,
-      const TimerState(
+      TimerState(
         status: TimerStatus.running,
         scramble: scramble,
-        elapsed: Duration(milliseconds: 8420),
+        elapsed: const Duration(milliseconds: 8420),
       ),
       name: 'running',
     );
@@ -128,7 +132,7 @@ void main() {
         lastSolve: Solve(
           id: 's4',
           event: '3x3',
-          scramble: scramble,
+          scramble: scramble.text,
           timeMs: 12340,
           solvedAt: DateTime(2026, 7, 19, 10, 4),
           penalty: Penalty.plus2,

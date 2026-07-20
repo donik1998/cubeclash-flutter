@@ -37,4 +37,10 @@ class AppRadius {
 
   /// Cards — 16 (aliases [lg]).
   static const double card = lg;
+
+  /// Race versus cards — 18 (Figma `34:150`).
+  ///
+  /// Between [card] and [xl]. The two cards sit side by side and read as one
+  /// unit, so the design rounds them a touch more than a standalone card.
+  static const double versusCard = 18;
 }

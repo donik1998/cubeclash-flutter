@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import '../../../core/realtime/race_gateway.dart';
+import '../../timer/domain/entities/wca_event.dart';
 import '../../timer/domain/usecases/generate_scramble.dart';
 
 /// A [RaceGateway] that plays the part of the server **and** an opponent.
@@ -27,6 +28,10 @@ class FakeRaceGateway implements RaceGateway {
 
   final Random _random;
   final GenerateScramble _generateScramble;
+
+  /// The event this room is racing. Set by [createRace]; a joined room learns
+  /// it from the host's `race:state`, which the fake mirrors back.
+  String _event = '3x3';
 
   final StreamController<Map<String, dynamic>> _state =
       StreamController<Map<String, dynamic>>.broadcast();
@@ -91,6 +96,7 @@ class FakeRaceGateway implements RaceGateway {
   @override
   void createRace({required String mode, String event = '3x3'}) {
     _reset();
+    _event = event;
     _raceId = 'race-${_random.nextInt(1 << 30)}';
     _code = mode == 'private' ? _inviteCode() : null;
 
@@ -117,6 +123,18 @@ class FakeRaceGateway implements RaceGateway {
       });
     });
   }
+
+  /// A believable solve time for [event]. A 2×2 opponent finishing in
+  /// fourteen seconds would break the demo as thoroughly as a 5×5 one
+  /// finishing in nine.
+  int _plausibleTimeMs(WcaEvent event) => switch (event.cubeSize ?? 3) {
+        2 => 3000 + _random.nextInt(4000),
+        3 => 9000 + _random.nextInt(9000),
+        4 => 38000 + _random.nextInt(30000),
+        5 => 70000 + _random.nextInt(50000),
+        6 => 140000 + _random.nextInt(80000),
+        _ => 210000 + _random.nextInt(120000),
+      };
 
   @override
   void joinByCode(String code) {
@@ -173,7 +191,9 @@ class FakeRaceGateway implements RaceGateway {
 
     // The scramble is revealed on GO, to both at once.
     _later(const Duration(seconds: 3), () {
-      _scramble.add(_generateScramble('3x3'));
+      _scramble.add(
+        _generateScramble.scrambleFor(WcaEvent.fromId(_event)).text,
+      );
       _emitState(
           status: 'racing', withOpponent: true, youReady: true, oppReady: true);
       _runOpponent();
@@ -181,12 +201,22 @@ class FakeRaceGateway implements RaceGateway {
   }
 
   /// The opponent solves in a plausible time, occasionally DNFing, with their
-  /// running clock reported at ~10 Hz like the real `race:opponent_progress`.
+  /// running clock reported like the real `race:opponent_progress`.
+  ///
+  /// **Both the pace and the cadence scale with the event.** A 3×3 race is
+  /// over in ten seconds and a 10 Hz opponent bar is what makes it feel live;
+  /// a 5×5 race is two minutes, where the same rate would be 1,200 messages
+  /// to animate a bar nobody is watching that closely. So long-form events
+  /// report at 4 Hz — still smooth at the scale the bar moves, at a third of
+  /// the traffic.
   void _runOpponent() {
-    _opponentTargetMs = 9000 + _random.nextInt(9000);
+    final WcaEvent event = WcaEvent.fromId(_event);
+    _opponentTargetMs = _plausibleTimeMs(event);
     final bool opponentDnfs = _random.nextDouble() < 0.08;
 
-    const Duration tick = Duration(milliseconds: 100);
+    final Duration tick = event.isLongForm || (event.cubeSize ?? 3) >= 5
+        ? const Duration(milliseconds: 250)
+        : const Duration(milliseconds: 100);
     int elapsed = 0;
 
     final Timer timer = Timer.periodic(tick, (Timer t) {
@@ -281,7 +311,7 @@ class FakeRaceGateway implements RaceGateway {
       'race_id': _raceId,
       'status': status,
       if (_code != null) 'code': _code,
-      'event': '3x3',
+      'event': _event,
       'players': <Map<String, dynamic>>[
         <String, dynamic>{
           'user_id': _youId,

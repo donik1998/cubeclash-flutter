@@ -14,12 +14,16 @@ class RaceOpened extends RaceEvent {
 
 /// Enqueue for a quick match, or open a private room.
 class RaceRequested extends RaceEvent {
-  const RaceRequested(this.mode);
+  const RaceRequested(this.mode, {this.event = '3x3'});
 
   final RaceMode mode;
 
+  /// Which event to race. Quick match only offers the short, populated events
+  /// (`WcaEvent.quickMatchEvents`); a private room takes anything raceable.
+  final String event;
+
   @override
-  List<Object?> get props => <Object?>[mode];
+  List<Object?> get props => <Object?>[mode, event];
 }
 
 class RaceJoinRequested extends RaceEvent {

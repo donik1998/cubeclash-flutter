@@ -14,11 +14,20 @@ class PenaltyControls extends StatelessWidget {
     required this.penalty,
     required this.enabled,
     required this.onChanged,
+    this.showPlus2 = true,
   });
 
   final Penalty penalty;
   final bool enabled;
   final ValueChanged<Penalty> onChanged;
+
+  /// Whether a `+2` is a coherent penalty for this event.
+  ///
+  /// It is not for Fewest Moves (two seconds added to a move count is
+  /// nonsense) or Multi-Blind (no inspection to overrun), so the chip is
+  /// removed rather than shown as a button that would lie about the result.
+  /// A **DNF stays for every event** — any attempt can fail.
+  final bool showPlus2;
 
   @override
   Widget build(BuildContext context) {
@@ -34,13 +43,15 @@ class PenaltyControls extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            AppChip(
-              label: '+2',
-              variant: AppChipVariant.plus2,
-              selected: penalty == Penalty.plus2,
-              onTap: () => toggle(Penalty.plus2),
-            ),
-            const SizedBox(width: AppSpacing.sm),
+            if (showPlus2) ...<Widget>[
+              AppChip(
+                label: '+2',
+                variant: AppChipVariant.plus2,
+                selected: penalty == Penalty.plus2,
+                onTap: () => toggle(Penalty.plus2),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+            ],
             AppChip(
               label: 'DNF',
               variant: AppChipVariant.dnf,

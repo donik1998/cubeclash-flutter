@@ -10,6 +10,7 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../domain/entities/race_room.dart';
 import '../bloc/race_bloc.dart';
+import '../widgets/race_event_selector.dart';
 import '../widgets/race_widgets.dart';
 
 /// The Race tab — `/race`.
@@ -117,8 +118,15 @@ class _LobbyState extends State<_Lobby> {
   }
 }
 
-class _QuickMatch extends StatelessWidget {
+class _QuickMatch extends StatefulWidget {
   const _QuickMatch();
+
+  @override
+  State<_QuickMatch> createState() => _QuickMatchState();
+}
+
+class _QuickMatchState extends State<_QuickMatch> {
+  String _event = '3x3';
 
   @override
   Widget build(BuildContext context) {
@@ -140,26 +148,41 @@ class _QuickMatch extends StatelessWidget {
           style: AppTypography.small.copyWith(color: colors.textSecondary),
         ),
         const SizedBox(height: AppSpacing.x3),
+        RaceEventSelector(
+          selected: _event,
+          quickMatchOnly: true,
+          onChanged: (String id) => setState(() => _event = id),
+        ),
+        const SizedBox(height: AppSpacing.xl),
         AppButton(
           label: 'Find a match',
           icon: Icons.search,
-          onPressed: () =>
-              context.read<RaceBloc>().add(const RaceRequested(RaceMode.quick)),
+          onPressed: () => context
+              .read<RaceBloc>()
+              .add(RaceRequested(RaceMode.quick, event: _event)),
         ),
       ],
     );
   }
 }
 
-class _PrivateRoom extends StatelessWidget {
+class _PrivateRoom extends StatefulWidget {
   const _PrivateRoom({required this.controller});
 
   final TextEditingController controller;
 
   @override
+  State<_PrivateRoom> createState() => _PrivateRoomState();
+}
+
+class _PrivateRoomState extends State<_PrivateRoom> {
+  String _event = '3x3';
+
+  @override
   Widget build(BuildContext context) {
     final AppColors colors = context.colors;
     final RaceBloc bloc = context.read<RaceBloc>();
+    final TextEditingController controller = widget.controller;
 
     return ListView(
       children: <Widget>[
@@ -178,10 +201,18 @@ class _PrivateRoom extends StatelessWidget {
                     AppTypography.small.copyWith(color: colors.textSecondary),
               ),
               const SizedBox(height: AppSpacing.lg),
+              // A private room takes anything raceable: you already know who
+              // is on the other side, so a four-minute 7×7 is a choice the two
+              // of you can make rather than a queue that will never fill.
+              RaceEventSelector(
+                selected: _event,
+                onChanged: (String id) => setState(() => _event = id),
+              ),
+              const SizedBox(height: AppSpacing.lg),
               AppButton(
                 label: 'Create room',
                 onPressed: () =>
-                    bloc.add(const RaceRequested(RaceMode.private)),
+                    bloc.add(RaceRequested(RaceMode.private, event: _event)),
               ),
             ],
           ),

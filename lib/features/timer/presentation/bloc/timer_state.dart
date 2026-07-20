@@ -27,7 +27,7 @@ class TimerState extends Equatable {
   const TimerState({
     this.status = TimerStatus.idle,
     this.event = '3x3',
-    this.scramble = '',
+    this.scramble = const Scramble.empty(),
     this.scrambleSource = ScrambleSource.random,
     this.previousScramble,
     this.elapsed = Duration.zero,
@@ -38,17 +38,26 @@ class TimerState extends Equatable {
     this.preferences = const TimerPreferences(),
     this.failure,
     this.isSaving = false,
+    this.awaitingManualResult = false,
+    this.recentEvents = const <String>['3x3'],
   });
 
   final TimerStatus status;
+
+  /// Event **id** (`3x3`, `4x4-bld`, `3x3-fmc`). The id rather than the
+  /// [WcaEvent] itself, because it is what goes on a `Solve` and over the
+  /// wire; [eventSpec] resolves it.
   final String event;
-  final String scramble;
+
+  /// The current scramble, structure intact — see [Scramble] for why this is
+  /// no longer a `String`.
+  final Scramble scramble;
 
   /// Which source the scramble card is showing (Figma: `scrtabs`).
   final ScrambleSource scrambleSource;
 
   /// The scramble before the current one — what `Last used` re-serves.
-  final String? previousScramble;
+  final Scramble? previousScramble;
 
   /// Solve time so far (or final, once stopped).
   final Duration elapsed;
@@ -73,6 +82,19 @@ class TimerState extends Equatable {
 
   final bool isSaving;
 
+  /// The attempt is over but the result is not known yet, because this event's
+  /// result cannot be measured by a stopwatch.
+  ///
+  /// Multi-Blind stops the clock and *then* asks how many cubes came out; the
+  /// solve is deliberately not written until it does, because a Multi-Blind
+  /// record without its solved/attempted pair is not a partial record, it is a
+  /// meaningless one. See [TimerManualResultSubmitted].
+  final bool awaitingManualResult;
+
+  /// Event ids most recently practised, most recent first — what the picker
+  /// pins to the top. Client-side only; not a server concept.
+  final List<String> recentEvents;
+
   /// Nav bar, scramble card and controls all hide during the solve — the
   /// running state is deliberately a bare readout (docs → Navigation & IA:
   /// "Solving state = full-screen minimal").
@@ -85,34 +107,39 @@ class TimerState extends Equatable {
   Penalty get pendingInspectionPenalty =>
       const GradeInspection().call(inspectionElapsed);
 
-  /// Session ao5 / ao12 / best, computed from effective times.
+  /// The selected event's full specification.
+  WcaEvent get eventSpec => WcaEvent.fromId(event);
+
+  /// The session, restricted to the selected event.
+  ///
+  /// A session can now hold more than one event, and an ao5 that mixed a 2×2
+  /// into a 7×7 would be a meaningless number presented as a real one.
+  List<Solve> get eventSolves =>
+      sessionSolves.where((Solve s) => s.event == event).toList();
+
+  /// The three cards under the timer, chosen by the event's competition format
+  /// — see [EventFormat.sessionStats].
   ///
   /// A DNF contributes `null`, which [ComputeAverages] treats as the slowest
-  /// possible time — so it is trimmed first and only poisons an average if a
-  /// second DNF forces it past the trim.
-  List<int?> get _effectiveTimes =>
-      sessionSolves.map((Solve s) => s.effectiveTimeMs).toList();
-
-  int? get sessionAo5 => const ComputeAverages().average(_effectiveTimes, 5);
-  int? get sessionAo12 => const ComputeAverages().average(_effectiveTimes, 12);
-
-  int? get sessionBest {
-    final List<int> valid = _effectiveTimes.whereType<int>().toList()..sort();
-    return valid.isEmpty ? null : valid.first;
-  }
+  /// possible attempt — so it is trimmed first and only poisons an average if
+  /// a second DNF forces it past the trim.
+  List<SessionStatValue> get sessionStats =>
+      const SessionStatistics()(eventSpec, eventSolves);
 
   TimerState copyWith({
     TimerStatus? status,
     String? event,
-    String? scramble,
+    Scramble? scramble,
     ScrambleSource? scrambleSource,
-    String? previousScramble,
+    Scramble? previousScramble,
     Duration? elapsed,
     Duration? inspectionElapsed,
     double? holdProgress,
     List<Solve>? sessionSolves,
     TimerPreferences? preferences,
     bool? isSaving,
+    bool? awaitingManualResult,
+    List<String>? recentEvents,
     // Nullable fields need an explicit "clear" flag — `??` can't distinguish
     // "leave it alone" from "set it back to null".
     Solve? lastSolve,
@@ -134,6 +161,8 @@ class TimerState extends Equatable {
         preferences: preferences ?? this.preferences,
         failure: clearFailure ? null : (failure ?? this.failure),
         isSaving: isSaving ?? this.isSaving,
+        awaitingManualResult: awaitingManualResult ?? this.awaitingManualResult,
+        recentEvents: recentEvents ?? this.recentEvents,
       );
 
   @override
@@ -151,5 +180,7 @@ class TimerState extends Equatable {
         preferences,
         failure,
         isSaving,
+        awaitingManualResult,
+        recentEvents,
       ];
 }

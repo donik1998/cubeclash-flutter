@@ -107,6 +107,38 @@ class TimerPreferencesChanged extends TimerEvent {
   List<Object?> get props => <Object?>[preferences];
 }
 
+/// A result the timer cannot measure, entered by hand.
+///
+/// Two events need it. **Fewest Moves** has no timed result at all — the
+/// result is the length of a solution you wrote down — so there is nothing for
+/// a stopwatch to capture. **Multi-Blind** is timed, but the time alone is not
+/// the result: `54:22` means nothing without the `11/13` beside it.
+///
+/// [timeMs] is the attempt duration where one was measured; for Fewest Moves
+/// it is whatever the user let run, and it never enters the ranking.
+class TimerManualResultSubmitted extends TimerEvent {
+  const TimerManualResultSubmitted({
+    this.moveCount,
+    this.solvedCount,
+    this.attemptedCount,
+    this.timeMs,
+  });
+
+  final int? moveCount;
+  final int? solvedCount;
+  final int? attemptedCount;
+  final int? timeMs;
+
+  @override
+  List<Object?> get props =>
+      <Object?>[moveCount, solvedCount, attemptedCount, timeMs];
+}
+
+/// The user backed out of the manual-result sheet without recording anything.
+class TimerManualResultCancelled extends TimerEvent {
+  const TimerManualResultCancelled();
+}
+
 class TimerSessionCleared extends TimerEvent {
   const TimerSessionCleared();
 }

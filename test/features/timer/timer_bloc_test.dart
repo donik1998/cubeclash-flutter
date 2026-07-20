@@ -6,11 +6,14 @@ import 'package:cubeclash/core/analytics/analytics_service.dart';
 import 'package:cubeclash/core/error/failures.dart';
 import 'package:cubeclash/core/error/result.dart';
 import 'package:cubeclash/core/network/page.dart';
+import 'package:cubeclash/features/timer/domain/entities/event_format.dart';
 import 'package:cubeclash/features/timer/domain/entities/penalty.dart';
+import 'package:cubeclash/features/timer/domain/entities/scramble.dart';
 import 'package:cubeclash/features/timer/domain/entities/solve.dart';
 import 'package:cubeclash/features/timer/domain/entities/timer_preferences.dart';
 import 'package:cubeclash/features/timer/domain/repositories/solve_repository.dart';
 import 'package:cubeclash/features/timer/domain/usecases/generate_scramble.dart';
+import 'package:cubeclash/features/timer/domain/usecases/session_statistics.dart';
 import 'package:cubeclash/features/timer/presentation/bloc/timer_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -129,7 +132,7 @@ void main() {
       act: (TimerBloc bloc) async {
         bloc.add(const TimerStarted());
         await Future<void>.delayed(Duration.zero);
-        final String first = bloc.state.scramble;
+        final Scramble first = bloc.state.scramble;
         bloc.add(const TimerScrambleRequested());
         await Future<void>.delayed(Duration.zero);
         expect(bloc.state.scramble, isNot(first));
@@ -415,7 +418,7 @@ void main() {
       act: (TimerBloc bloc) async {
         bloc.add(const TimerStarted());
         await Future<void>.delayed(Duration.zero);
-        final String scrambleSolved = bloc.state.scramble;
+        final Scramble scrambleSolved = bloc.state.scramble;
 
         bloc.add(const TimerPressedUp());
         await Future<void>.delayed(Duration.zero);
@@ -425,7 +428,7 @@ void main() {
         expect(bloc.state.scramble, isNot(scrambleSolved));
         expect(
           bloc.state.lastSolve?.scramble,
-          scrambleSolved,
+          scrambleSolved.text,
           reason: 'the solve keeps the scramble it was actually solved on',
         );
       },
@@ -539,9 +542,15 @@ void main() {
       },
       verify: (TimerBloc bloc) {
         expect(bloc.state.sessionSolves, hasLength(5));
-        expect(bloc.state.sessionBest, 10000);
+        // 3×3 is an Ao5 event, so the cards are best · ao5 · ao12.
+        final List<SessionStatValue> stats = bloc.state.sessionStats;
+        expect(
+          stats.map((SessionStatValue s) => s.stat),
+          <SessionStat>[SessionStat.best, SessionStat.ao5, SessionStat.ao12],
+        );
+        expect(stats[0].value, 10000);
         // ao5 trims 10000 and 14000, means the rest.
-        expect(bloc.state.sessionAo5, 12000);
+        expect(stats[1].value, 12000);
       },
     );
 
@@ -570,7 +579,7 @@ void main() {
         bloc.add(const TimerPressedUp());
         await Future<void>.delayed(Duration.zero);
 
-        final String during = bloc.state.scramble;
+        final Scramble during = bloc.state.scramble;
         bloc.add(const TimerScrambleRequested());
         await Future<void>.delayed(Duration.zero);
         expect(bloc.state.scramble, during);
@@ -589,7 +598,7 @@ void main() {
       verify: (TimerBloc bloc) {
         expect(bloc.state.event, '2x2');
         expect(bloc.state.status, TimerStatus.idle);
-        expect(bloc.state.scramble.split(' '), hasLength(11));
+        expect(bloc.state.scramble.moveCount, 11);
       },
     );
   });
