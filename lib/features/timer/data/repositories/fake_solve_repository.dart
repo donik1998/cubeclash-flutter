@@ -67,6 +67,9 @@ class FakeSolveRepository implements SolveRepository {
     required Penalty penalty,
     required DateTime solvedAt,
     required String clientId,
+    int? moveCount,
+    int? solvedCount,
+    int? attemptedCount,
   }) async {
     await Future<void>.delayed(_latency);
     final Solve solve = Solve(
@@ -76,6 +79,9 @@ class FakeSolveRepository implements SolveRepository {
       timeMs: timeMs,
       solvedAt: solvedAt,
       penalty: penalty,
+      moveCount: moveCount,
+      solvedCount: solvedCount,
+      attemptedCount: attemptedCount,
     );
     _session.add(solve);
     _history.insert(0, solve);

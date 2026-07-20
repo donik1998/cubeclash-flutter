@@ -24,6 +24,9 @@ abstract class SolveRepository {
   /// [clientId] is a stable client-generated id; the server upserts on
   /// `(user_id, client_id)` so a retried write is idempotent (docs → API
   /// Design § Idempotency).
+  ///
+  /// [moveCount] / [solvedCount] / [attemptedCount] carry the long-form
+  /// events' results and are `null` for the other fifteen — see `Solve`.
   Future<Result<Solve>> addSolve({
     required String event,
     required String scramble,
@@ -31,6 +34,9 @@ abstract class SolveRepository {
     required Penalty penalty,
     required DateTime solvedAt,
     required String clientId,
+    int? moveCount,
+    int? solvedCount,
+    int? attemptedCount,
   });
 
   /// Applies or clears a penalty on an existing solve.

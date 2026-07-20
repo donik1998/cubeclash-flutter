@@ -84,10 +84,57 @@ class PuzzleSpec {
     moveCount: 40,
   );
 
-  /// Every puzzle the scrambler can currently produce, by event id.
+  /// 5×5 — the same face set as 4×4 (one wide layer), just longer.
+  static const PuzzleSpec cube5x5 = PuzzleSpec(
+    event: '5x5',
+    axes: <List<String>>[
+      <String>['U', 'Uw', 'D', 'Dw'],
+      <String>['L', 'Lw', 'R', 'Rw'],
+      <String>['F', 'Fw', 'B', 'Bw'],
+    ],
+    moveCount: 60,
+  );
+
+  /// 6×6 — adds the **three-layer** wide turn, written `3Uw`.
+  ///
+  /// The face token grows to three characters, which is exactly the case
+  /// `GenerateScramble._faceOf`'s longest-match-first ordering exists for:
+  /// `3Rw2` must resolve to the face `3Rw` with modifier `2`, not to `3R` or
+  /// to `Rw` with a nonsense prefix.
+  static const PuzzleSpec cube6x6 = PuzzleSpec(
+    event: '6x6',
+    axes: <List<String>>[
+      <String>['U', 'Uw', '3Uw', 'D', 'Dw', '3Dw'],
+      <String>['L', 'Lw', '3Lw', 'R', 'Rw', '3Rw'],
+      <String>['F', 'Fw', '3Fw', 'B', 'Bw', '3Bw'],
+    ],
+    moveCount: 80,
+  );
+
+  /// 7×7 — same face set as 6×6 (WCA scrambles do not use `4Uw`, since a
+  /// four-layer turn on a 7×7 is the inverse of a three-layer turn on the
+  /// opposite face), with a longer sequence.
+  static const PuzzleSpec cube7x7 = PuzzleSpec(
+    event: '7x7',
+    axes: <List<String>>[
+      <String>['U', 'Uw', '3Uw', 'D', 'Dw', '3Dw'],
+      <String>['L', 'Lw', '3Lw', 'R', 'Rw', '3Rw'],
+      <String>['F', 'Fw', '3Fw', 'B', 'Bw', '3Bw'],
+    ],
+    moveCount: 100,
+  );
+
+  /// Every puzzle the scrambler can currently produce, by **puzzle** id.
+  ///
+  /// Keyed by puzzle rather than by event: 3×3, One-Handed, Blindfolded,
+  /// Fewest Moves and Multi-Blind are five events on one puzzle, and they all
+  /// scramble identically. `WcaEvent.puzzle` does that mapping.
   static const Map<String, PuzzleSpec> byEvent = <String, PuzzleSpec>{
     '3x3': cube3x3,
     '2x2': cube2x2,
     '4x4': cube4x4,
+    '5x5': cube5x5,
+    '6x6': cube6x6,
+    '7x7': cube7x7,
   };
 }

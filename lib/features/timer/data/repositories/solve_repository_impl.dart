@@ -49,6 +49,9 @@ class SolveRepositoryImpl implements SolveRepository {
     required Penalty penalty,
     required DateTime solvedAt,
     required String clientId,
+    int? moveCount,
+    int? solvedCount,
+    int? attemptedCount,
   }) =>
       Result.guard<Solve>(
         () async {
@@ -61,6 +64,9 @@ class SolveRepositoryImpl implements SolveRepository {
               penalty: penalty,
               solvedAt: solvedAt,
               clientId: clientId,
+              moveCount: moveCount,
+              solvedCount: solvedCount,
+              attemptedCount: attemptedCount,
             ),
           );
           final Solve solve = SolveDto.fromJson(

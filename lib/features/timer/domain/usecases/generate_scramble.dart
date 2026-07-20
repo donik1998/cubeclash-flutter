@@ -1,6 +1,8 @@
 import 'dart:math';
 
 import '../entities/puzzle_spec.dart';
+import '../entities/scramble.dart';
+import '../entities/wca_event.dart';
 
 /// Generates a random-move scramble.
 ///
@@ -46,8 +48,34 @@ class GenerateScramble {
     return forPuzzle(spec);
   }
 
+  /// A **structured** scramble for [event] — the entry point the app uses.
+  ///
+  /// Returns [Scramble.empty] rather than throwing for an event with no
+  /// scrambler (Megaminx, Pyraminx, Skewb, Square-1, Clock). That is not the
+  /// silent fallback [call] guards against — an empty scramble renders as the
+  /// explicit "scrambles coming" state, so the user is told there is nothing
+  /// rather than handed a 3×3 scramble under a Megaminx label.
+  ///
+  /// Multi-Blind returns [WcaEvent.scrambleCount] independent 3×3 scrambles,
+  /// one per line, because a Multi-Blind attempt is N scrambles and not one.
+  Scramble scrambleFor(WcaEvent event) {
+    final PuzzleSpec? spec = event.puzzle;
+    if (spec == null) return const Scramble.empty();
+
+    return Scramble(
+      lines: <List<String>>[
+        for (int i = 0; i < event.scrambleCount; i++) _movesFor(spec),
+      ],
+      notation: event.notation,
+    );
+  }
+
   /// A scramble for an explicit [spec].
-  String forPuzzle(PuzzleSpec spec) {
+  String forPuzzle(PuzzleSpec spec) => _movesFor(spec).join(' ');
+
+  /// The move list for [spec] — the shared core of [forPuzzle] and
+  /// [scrambleFor].
+  List<String> _movesFor(PuzzleSpec spec) {
     final List<String> faces = spec.faces;
     final List<String> moves = <String>[];
 
@@ -67,7 +95,7 @@ class GenerateScramble {
       lastFace = face;
     }
 
-    return moves.join(' ');
+    return moves;
   }
 
   /// Whether [face] may follow [lastFace] / [secondLastFace].
@@ -118,7 +146,19 @@ class GenerateScramble {
     return null;
   }
 
-  /// Validates a whole scramble string against the same rules.
+  /// Validates a structured [scramble] against the same rules.
+  ///
+  /// **Every line is validated independently**, which is the whole point of
+  /// keeping the structure: a Multi-Blind scramble is N separate scrambles, so
+  /// the legality chain must reset at each line break rather than treating the
+  /// last move of cube 1 as the predecessor of the first move of cube 2.
+  static bool isValidScrambleFor(Scramble scramble, PuzzleSpec spec) {
+    if (scramble.isEmpty) return false;
+    return scramble.lines
+        .every((List<String> line) => isValidScramble(line.join(' '), spec));
+  }
+
+  /// Validates a single line of scramble against the same rules.
   static bool isValidScramble(String scramble, PuzzleSpec spec) {
     final List<String> tokens =
         scramble.split(' ').where((String t) => t.isNotEmpty).toList();

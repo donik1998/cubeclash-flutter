@@ -26,6 +26,12 @@ class SolveDto {
         timeMs: (json['time_ms'] as num).toInt(),
         solvedAt: DateTime.parse(json['solved_at'] as String).toLocal(),
         penalty: penaltyFromWire(json['penalty'] as String?),
+        // Long-form events only, and absent for the other fifteen — hence
+        // nullable rather than defaulted. A 3×3 solve carrying `move_count: 0`
+        // would be a claim, not a blank.
+        moveCount: (json['move_count'] as num?)?.toInt(),
+        solvedCount: (json['solved_count'] as num?)?.toInt(),
+        attemptedCount: (json['attempted_count'] as num?)?.toInt(),
       );
 
   /// Body for `POST /solves`.
@@ -40,9 +46,17 @@ class SolveDto {
     required Penalty penalty,
     required DateTime solvedAt,
     required String clientId,
+    int? moveCount,
+    int? solvedCount,
+    int? attemptedCount,
   }) =>
       <String, dynamic>{
         'event': event,
+        // Stays a plain string, newline-separated where the event's notation
+        // has significant line breaks (Megaminx, Multi-Blind). See `Scramble`
+        // — notation is a client display concern, so the wire format did not
+        // have to change and the backend does not have to know about it. The
+        // one new guarantee is that `\n` is significant and must round-trip.
         'scramble': scramble,
         // The MVP scrambler is random-move, not a WCA random-state solver.
         // The server records which, so stats can be segmented by source later.
@@ -51,6 +65,12 @@ class SolveDto {
         'penalty': penaltyToWire(penalty),
         'solved_at': solvedAt.toUtc().toIso8601String(),
         'client_id': clientId,
+        // Omitted entirely for the fifteen events that have no such result,
+        // rather than sent as null — the column is genuinely inapplicable, and
+        // an absent key says that where an explicit null does not.
+        if (moveCount != null) 'move_count': moveCount,
+        if (solvedCount != null) 'solved_count': solvedCount,
+        if (attemptedCount != null) 'attempted_count': attemptedCount,
       };
 
   static Penalty penaltyFromWire(String? wire) => switch (wire) {

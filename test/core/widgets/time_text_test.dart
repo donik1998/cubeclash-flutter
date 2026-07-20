@@ -14,7 +14,21 @@ void main() {
       expect(TimeText.format(60000), '1:00.00');
       expect(TimeText.format(83450), '1:23.45');
       expect(TimeText.format(69990), '1:09.99');
-      expect(TimeText.format(600000), '10:00.00');
+    });
+
+    test('drops the hundredths from ten minutes up (WCA 9f2)', () {
+      // Regulation 9f2: results of ten minutes or more are truncated to
+      // seconds, not hundredths. The boundary is exact.
+      expect(TimeText.format(599990), '9:59.99');
+      expect(TimeText.format(600000), '10:00');
+      expect(TimeText.format(754000), '12:34');
+    });
+
+    test('formats an hour or more with three fields', () {
+      // A Multi-Blind attempt runs to sixty minutes (Regulation H1b), so the
+      // readout has to survive an hours field.
+      expect(TimeText.format(3600000), '1:00:00');
+      expect(TimeText.format(3862000), '1:04:22');
     });
 
     test('truncates hundredths rather than rounding up', () {
