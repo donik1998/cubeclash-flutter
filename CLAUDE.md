@@ -137,6 +137,22 @@ Claude Code configuration for this repo:
 - **`settings.local.json`** — *personal, git-ignored.* Your machine-local permission scope — an allow / ask / deny list that lets the agent run project dev commands (flutter, dart, git, common shell tools) and edit files **without a prompt each time, bounded to this project**. Consequential actions (`git push`, `gh`) are set to *ask*; destructive ones (`sudo`, `rm -rf`, force-push, `reset --hard`) are *denied*. Widen or tighten it as you like — it never leaves your machine.
 - **`commands/`** — *shared, committed.* Slash commands: `/scaffold-feature`, `/run-checks`.
 
+## Pending work — prompts
+
+Two pieces are specced but not built. Each is written to be pasted into a fresh
+session (see §9 of `IMPLEMENTATION_PROMPT.md` — one phase per session):
+
+- **`PROMPT_RACE_FIGMA.md`** — the Race screens were built before the Figma MCP
+  was reachable and don't match the frames. Live Race in particular is a
+  different screen (two side-by-side player cards with `VS`, no hero timer, no
+  progress bars). Presentation layer only; `RaceBloc` stays as-is.
+- **`PROMPT_WCA_EVENTS.md`** — support all 17 official WCA events. This is a
+  domain-model task before a UI one: a scramble stops being a space-separated
+  string (Megaminx line breaks are semantic, Square-1 is slash-separated pairs,
+  Multi-Blind is N scrambles), a result stops being a sub-minute time (FMC is a
+  move count, Multi-Blind runs to an hour), and averaging becomes per-event
+  (Mo3 for 6×6/7×7, Bo3 for blindfolded). Requires a proposal before code.
+
 ## Roadmap (post-MVP)
 
 CV camera timer (flagship v1.1, doubles as PvP anti-cheat), full offline sync,
