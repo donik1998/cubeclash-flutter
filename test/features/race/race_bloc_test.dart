@@ -340,6 +340,126 @@ void main() {
     });
   });
 
+  group('a result that never arrives', () {
+    /// Submits, then advances the silence watchdog past its timeout.
+    ///
+    /// The channel index is the watchdog's own ticker subscription, opened by
+    /// `_startSilenceWatchdog` when the solve is submitted.
+    Future<void> submitThenGoQuiet(int watchdogChannel) async {
+      ticker.emitTo(watchdogChannel, RaceBloc.silenceTimeout);
+      await settle();
+    }
+
+    test('the user is not stranded when the server goes quiet', () async {
+      await raceToRacing();
+      ticker.emit(const Duration(milliseconds: 9000));
+      await settle();
+
+      bloc.add(const RaceSolveStopped());
+      await settle();
+
+      expect(bloc.state.phase, RacePhase.submitted);
+      expect(
+        bloc.state.canLeave,
+        isFalse,
+        reason: 'a normal wait offers no exit — the race is still live',
+      );
+
+      // The watchdog is the last ticker channel opened.
+      await submitThenGoQuiet(ticker.channels.length - 1);
+
+      expect(bloc.state.resultOverdue, isTrue);
+      expect(
+        bloc.state.canLeave,
+        isTrue,
+        reason: 'without this there is no way off the live race screen at all',
+      );
+      expect(
+        bloc.state.phase,
+        RacePhase.submitted,
+        reason: 'the client still has not decided anything — the server rules',
+      );
+    });
+
+    test('inbound traffic resets the watchdog', () async {
+      await raceToRacing();
+      ticker.emit(const Duration(milliseconds: 9000));
+      await settle();
+      bloc.add(const RaceSolveStopped());
+      await settle();
+
+      final int watchdog = ticker.channels.length - 1;
+
+      // Most of the way to the timeout, then the opponent reports progress —
+      // they are still solving, so the race is healthy.
+      ticker.emitTo(watchdog, const Duration(seconds: 15));
+      await settle();
+      gateway.emitOpponentProgress(14000);
+      await settle();
+
+      // The reset opened a fresh channel; the old one must be dead.
+      expect(
+        ticker.channels.length,
+        greaterThan(watchdog + 1),
+        reason: 'activity should restart the watchdog, not extend it',
+      );
+
+      // Drive the *old* channel well past the timeout. If the watchdog had
+      // merely been left running, this would fire — which is the bug this
+      // asserts against. (Asserting on 15 < 20 alone would pass either way.)
+      ticker.emitTo(watchdog, const Duration(minutes: 5));
+      await settle();
+
+      expect(
+        bloc.state.resultOverdue,
+        isFalse,
+        reason: 'the superseded watchdog must have been cancelled',
+      );
+    });
+
+    test('a result arriving clears the overdue flag', () async {
+      await raceToRacing();
+      ticker.emit(const Duration(milliseconds: 9000));
+      await settle();
+      bloc.add(const RaceSolveStopped());
+      await settle();
+
+      await submitThenGoQuiet(ticker.channels.length - 1);
+      expect(bloc.state.resultOverdue, isTrue);
+
+      gateway.emitResult(result: 'win', yourTime: 9000, oppTime: 10000);
+      await settle();
+
+      expect(bloc.state.resultOverdue, isFalse);
+      expect(bloc.state.phase, RacePhase.settled);
+    });
+
+    test('leaving an overdue race does not retract the submitted time',
+        () async {
+      await raceToRacing();
+      ticker.emit(const Duration(milliseconds: 9000));
+      await settle();
+      bloc.add(const RaceSolveStopped());
+      await settle();
+      await submitThenGoQuiet(ticker.channels.length - 1);
+
+      bloc.add(const RaceDismissed());
+      await settle();
+
+      expect(bloc.state.phase, RacePhase.idle);
+      expect(
+        gateway.submittedTimes,
+        <int>[9000],
+        reason: 'the time stays with the server; leaving is a UI decision',
+      );
+      expect(
+        gateway.leaveCalls,
+        0,
+        reason: 'dismiss must not drop the room — the server still settles it',
+      );
+    });
+  });
+
   group('results — the server decides', () {
     test('a win carries both times, the delta and the Elo change', () async {
       await raceToRacing();

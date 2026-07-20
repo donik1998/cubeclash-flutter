@@ -114,6 +114,12 @@ class RaceResultReceived extends RaceEvent {
   List<Object?> get props => <Object?>[payload];
 }
 
+/// The gateway has said nothing for [RaceBloc.silenceTimeout] while we were
+/// waiting to be settled.
+class RaceResultOverdue extends RaceEvent {
+  const RaceResultOverdue();
+}
+
 class RaceConnectionChanged extends RaceEvent {
   const RaceConnectionChanged(this.connection);
 

@@ -37,7 +37,7 @@ test/
   **/goldens/*.png          goldens live next to their test file
 ```
 
-Current state — **all phases (A–H) complete**, 382 tests green:
+Current state — **all phases (A–H) complete**, 398 tests green:
 
 - **Component library** (`core/widgets`) — built, golden-tested light + dark.
 - **Timer feature** — complete, across **all 17 WCA events**. Local scrambler
@@ -139,6 +139,7 @@ fails with a pointer to the authority.
 - **Networking:** Dio + `AuthInterceptor`. Refresh-on-401 is **single-flight** — concurrent 401s share one refresh, because token rotation means a second refresh would present an already-dead token and sign the user out during a recoverable blip. A retry is flagged so its own 401 can't loop. Refresh goes through a *separate* un-intercepted Dio. Base URL via `--dart-define=API_BASE_URL`; REST base `/v1`, `snake_case`.
 - **Tokens** live in `TokenStore` (in memory for synchronous header attach, written through to `flutter_secure_storage`). It is a `ChangeNotifier` — the router's guard redirects off its notifications, which is how a dead session bounces the user out.
 - **Real-time:** `RaceGateway` is an *interface*; `SocketRaceGateway` wraps socket_io_client on `/race`, `FakeRaceGateway` scripts the whole lifecycle (opponent included) so races are demoable with no backend. Both emit identical events in identical order, so `RaceBloc` can't tell them apart. `RaceBloc` is a **singleton** — a race outlives the lobby widget, since Live Race is its own route.
+- **No screen may strand the user.** The live race blocks back mid-solve, so `RaceBloc` runs a **silence watchdog**: 20s with no inbound gateway message while `submitted` sets `resultOverdue`, which surfaces an exit. Measured as *silence*, not elapsed wait, so it needs no per-event timeout — opponent progress arrives continuously during a real race. It never decides an outcome.
 - **The server owns competitive truth.** The Race bloc never compares two times, picks a winner, or computes an Elo change; it renders `race:result`. Same rule for `is_pb` and leaderboard rank.
 - **Settings** live in `SettingsCubit`, a **singleton provided above `MaterialApp`** (the theme is one of its values) and loaded in `main()` before the first frame so the app never flashes the wrong theme. Every change writes through immediately — no save button. The Timer screen listens and forwards `timerPreferences` to `TimerBloc`.
 - **Tests that touch settings** must register `InMemorySettingsRepository` (test/support) — `shared_preferences` goes through a platform channel that never answers under `flutter test`, so a write just hangs.

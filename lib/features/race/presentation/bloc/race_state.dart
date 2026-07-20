@@ -42,6 +42,7 @@ class RaceState extends Equatable {
     this.searchElapsed = Duration.zero,
     this.failure,
     this.mode = RaceMode.quick,
+    this.resultOverdue = false,
   });
 
   final RacePhase phase;
@@ -70,6 +71,13 @@ class RaceState extends Equatable {
   final Failure? failure;
   final RaceMode mode;
 
+  /// The server has gone quiet while we wait for `race:result`.
+  ///
+  /// Set by the bloc's silence watchdog — see [RaceBloc]. Purely informational:
+  /// it never decides an outcome, it only tells the UI that offering a way out
+  /// is now the honest thing to do.
+  final bool resultOverdue;
+
   RacePlayer? get you => room?.you;
   RacePlayer? get opponent => room?.opponent;
 
@@ -89,6 +97,21 @@ class RaceState extends Equatable {
   /// You've submitted and are waiting on them.
   bool get waitingForOpponent => phase == RacePhase.submitted;
 
+  /// Whether leaving the live race is currently possible.
+  ///
+  /// The frames deliberately show no way out mid-race, and that is right for
+  /// the countdown and the solve: the race is in flight, and while solving the
+  /// whole surface is the stop button anyway.
+  ///
+  /// **`submitted` is different.** You have already stopped — the surface is no
+  /// longer the stop button and you are waiting on someone else. If the result
+  /// never arrives there is otherwise no way off this screen at all, so once
+  /// the watchdog reports silence ([resultOverdue]) the exit comes back.
+  bool get canLeave =>
+      phase == RacePhase.settled ||
+      phase == RacePhase.readyCheck ||
+      (phase == RacePhase.submitted && resultOverdue);
+
   /// The opponent dropped and is inside the grace window. Surfaced in the UI so
   /// a frozen progress bar is explained rather than mysterious.
   bool get opponentReconnecting => opponent?.connected == false;
@@ -107,6 +130,7 @@ class RaceState extends Equatable {
     Duration? searchElapsed,
     GatewayConnection? connection,
     RaceMode? mode,
+    bool? resultOverdue,
     // Nullable fields need explicit clears.
     int? countdown,
     bool clearCountdown = false,
@@ -129,6 +153,7 @@ class RaceState extends Equatable {
         searchElapsed: searchElapsed ?? this.searchElapsed,
         failure: clearFailure ? null : (failure ?? this.failure),
         mode: mode ?? this.mode,
+        resultOverdue: resultOverdue ?? this.resultOverdue,
       );
 
   @override
@@ -144,5 +169,6 @@ class RaceState extends Equatable {
         searchElapsed,
         failure,
         mode,
+        resultOverdue,
       ];
 }

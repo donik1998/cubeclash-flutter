@@ -566,4 +566,64 @@ void main() {
       verify(() => bloc.add(const RaceDismissed())).called(1);
     });
   });
+
+  group('a stalled race', () {
+    testWidgets('offers no way out while the wait is still normal',
+        (WidgetTester tester) async {
+      await pumpLive(
+        tester,
+        RaceState(
+          phase: RacePhase.submitted,
+          yourTimeMs: 9870,
+          room: roomOf(status: RaceStatus.racing),
+        ),
+      );
+
+      expect(find.text('Waiting for your opponent to finish'), findsOneWidget);
+      expect(find.text('Back to lobby'), findsNothing);
+    });
+
+    testWidgets('surfaces an exit once the result is overdue',
+        (WidgetTester tester) async {
+      await pumpLive(
+        tester,
+        RaceState(
+          phase: RacePhase.submitted,
+          yourTimeMs: 9870,
+          resultOverdue: true,
+          room: roomOf(status: RaceStatus.racing),
+        ),
+      );
+
+      expect(find.text("We've lost touch with the race"), findsOneWidget);
+      // The reassurance matters as much as the button: without it, leaving
+      // reads as forfeiting and nobody takes the exit.
+      expect(
+        find.textContaining('already submitted and will still count'),
+        findsOneWidget,
+      );
+      expect(find.text('Back to lobby'), findsOneWidget);
+    });
+
+    testWidgets('the exit dismisses rather than cancelling',
+        (WidgetTester tester) async {
+      await pumpLive(
+        tester,
+        RaceState(
+          phase: RacePhase.submitted,
+          yourTimeMs: 9870,
+          resultOverdue: true,
+          room: roomOf(status: RaceStatus.racing),
+        ),
+      );
+
+      await tester.tap(find.text('Back to lobby'));
+      await tester.pump();
+
+      // Dismiss keeps the submitted time with the server; cancel would leave
+      // the room and could be read as a forfeit.
+      verify(() => bloc.add(const RaceDismissed())).called(1);
+      verifyNever(() => bloc.add(const RaceCancelled()));
+    });
+  });
 }

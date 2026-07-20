@@ -51,7 +51,9 @@ class _LiveRaceView extends StatelessWidget {
         return PopScope(
           // No escape mid-solve. Leaving a live race has to be deliberate, and
           // the × in the header is where you leave from.
-          canPop: state.phase == RacePhase.settled,
+          // Back is blocked mid-race, but never in a way that can strand
+          // the user — see RaceState.canLeave.
+          canPop: state.canLeave,
           child: Scaffold(
             backgroundColor: colors.bgCanvas,
             body: SafeArea(
@@ -112,9 +114,18 @@ class _InRace extends StatelessWidget {
       // countdown and the solve the race is in flight — that is precisely what
       // the PopScope above is guarding — and while racing the whole surface is
       // the stop button anyway, so a × there could never be tapped.
-      onClose: state.phase == RacePhase.readyCheck
-          ? () => bloc.add(const RaceCancelled())
-          : null,
+      //
+      // Once submitted-and-overdue, the exit comes back: your time is already
+      // with the server, you are only waiting to be told the outcome, and
+      // without this there is no way off the screen at all.
+      onClose: switch (state.phase) {
+        RacePhase.readyCheck => () => bloc.add(const RaceCancelled()),
+        // Dismiss, not cancel: the submitted time stands and the server still
+        // settles the race — leaving the screen must not retract it.
+        RacePhase.submitted when state.resultOverdue => () =>
+            bloc.add(const RaceDismissed()),
+        _ => null,
+      },
       stage: stage,
     );
   }
@@ -268,23 +279,45 @@ class _Waiting extends StatelessWidget {
     final AppColors colors = context.colors;
     final bool dropped = state.opponentReconnecting;
 
+    final bool overdue = state.resultOverdue;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         Text(
-          dropped
-              ? 'Your opponent dropped — waiting for them to reconnect'
-              : 'Waiting for your opponent to finish',
+          overdue
+              ? "We've lost touch with the race"
+              : dropped
+                  ? 'Your opponent dropped — waiting for them to reconnect'
+                  : 'Waiting for your opponent to finish',
           textAlign: TextAlign.center,
           style: AppTypography.stagePrompt.copyWith(
-            color: dropped ? colors.statusWarning : colors.textSecondary,
+            color: overdue || dropped
+                ? colors.statusWarning
+                : colors.textSecondary,
           ),
         ),
         const SizedBox(height: AppSpacing.md),
         Text(
-          'The server decides the result.',
+          overdue
+              // Reassure precisely: the time is already server-side, so
+              // leaving costs nothing. Without saying so, the exit reads as
+              // "forfeit" and nobody takes it.
+              ? 'Your time is already submitted and will still count. '
+                  'You can leave and check the result later.'
+              : 'The server decides the result.',
+          textAlign: TextAlign.center,
           style: AppTypography.caption.copyWith(color: colors.textMuted),
         ),
+        if (overdue) ...<Widget>[
+          const SizedBox(height: AppSpacing.xl),
+          AppButton.secondary(
+            label: 'Back to lobby',
+            expand: false,
+            onPressed: () =>
+                context.read<RaceBloc>().add(const RaceDismissed()),
+          ),
+        ],
       ],
     );
   }

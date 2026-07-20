@@ -67,6 +67,7 @@ class RaceBloc extends Bloc<RaceEvent, RaceState> {
     on<RaceScrambleReceived>(_onScrambleReceived);
     on<RaceOpponentProgressReceived>(_onOpponentProgressReceived);
     on<RaceResultReceived>(_onResultReceived);
+    on<RaceResultOverdue>(_onResultOverdue);
     on<RaceConnectionChanged>(_onConnectionChanged);
     on<RaceSolveTicked>(_onSolveTicked);
     on<RaceSearchTicked>(_onSearchTicked);
@@ -82,6 +83,23 @@ class RaceBloc extends Bloc<RaceEvent, RaceState> {
   StreamSubscription<Duration>? _solveSub;
   StreamSubscription<Duration>? _searchSub;
 
+  /// Watches for the gateway going silent while we wait to be settled.
+  StreamSubscription<Duration>? _silenceSub;
+
+  /// How long the gateway may say **nothing** while we sit in `submitted`
+  /// before the UI offers a way out.
+  ///
+  /// Deliberately measured as *silence*, not as elapsed wait, so it does not
+  /// have to guess how long a solve takes: during a normal race the opponent's
+  /// `race:opponent_progress` arrives continuously, and once they finish the
+  /// server settles immediately. Twenty seconds of nothing at all means
+  /// something is wrong regardless of whether the event is a 2×2 or a 7×7 —
+  /// which is exactly why this isn't a per-event timeout.
+  ///
+  /// It never decides an outcome. The server still owns the result; this only
+  /// stops the user being trapped on a screen that has no exit.
+  static const Duration silenceTimeout = Duration(seconds: 20);
+
   bool _connected = false;
 
   // --- Lifecycle -------------------------------------------------------------
@@ -93,19 +111,25 @@ class RaceBloc extends Bloc<RaceEvent, RaceState> {
     _gateway.connect(accessToken: _accessToken);
 
     _gatewaySubs.addAll(<StreamSubscription<dynamic>>[
-      _gateway.onState.listen(
-        (Map<String, dynamic> p) => add(RaceStateReceived(p)),
-      ),
-      _gateway.onReadyUpdate.listen(
-        (Map<String, dynamic> p) => add(RaceReadyUpdateReceived(p)),
-      ),
+      _gateway.onState.listen((Map<String, dynamic> p) {
+        _noteGatewayActivity();
+        add(RaceStateReceived(p));
+      }),
+      _gateway.onReadyUpdate.listen((Map<String, dynamic> p) {
+        _noteGatewayActivity();
+        add(RaceReadyUpdateReceived(p));
+      }),
       _gateway.onCountdown.listen((int n) => add(RaceCountdownReceived(n))),
       _gateway.onScramble.listen(
         (String s) => add(RaceScrambleReceived(s)),
       ),
-      _gateway.onOpponentProgress.listen(
-        (int ms) => add(RaceOpponentProgressReceived(ms)),
-      ),
+      _gateway.onOpponentProgress.listen((int ms) {
+        // The signal that matters most: while the opponent is still solving
+        // this arrives continuously, so silence here is what "something is
+        // wrong" actually looks like.
+        _noteGatewayActivity();
+        add(RaceOpponentProgressReceived(ms));
+      }),
       _gateway.onResult.listen(
         (Map<String, dynamic> p) => add(RaceResultReceived(p)),
       ),
@@ -213,6 +237,33 @@ class RaceBloc extends Bloc<RaceEvent, RaceState> {
   }
 
   // --- Server-driven transitions ---------------------------------------------
+
+  /// Restarts the silence watchdog. Called on every inbound gateway message,
+  /// so the timeout measures *silence* rather than elapsed wait.
+  void _noteGatewayActivity() {
+    if (state.phase != RacePhase.submitted) return;
+    _startSilenceWatchdog();
+  }
+
+  void _startSilenceWatchdog() {
+    _silenceSub?.cancel();
+    _silenceSub = _ticker
+        .elapsed(interval: const Duration(seconds: 1))
+        .listen((Duration since) {
+      if (since >= silenceTimeout) add(const RaceResultOverdue());
+    });
+  }
+
+  Future<void> _stopSilenceWatchdog() async {
+    await _silenceSub?.cancel();
+    _silenceSub = null;
+  }
+
+  void _onResultOverdue(RaceResultOverdue event, Emitter<RaceState> emit) {
+    // Only meaningful while waiting to be settled, and only once.
+    if (state.phase != RacePhase.submitted || state.resultOverdue) return;
+    emit(state.copyWith(resultOverdue: true));
+  }
 
   Future<void> _onStateReceived(
     RaceStateReceived event,
@@ -380,8 +431,13 @@ class RaceBloc extends Bloc<RaceEvent, RaceState> {
         phase: RacePhase.submitted,
         yourTimeMs: timeMs,
         elapsed: Duration(milliseconds: timeMs),
+        resultOverdue: false,
       ),
     );
+
+    // From here the only thing that ends this screen is `race:result`. If that
+    // never comes, the watchdog is what stops the user being stranded.
+    _startSilenceWatchdog();
   }
 
   Future<void> _onResultReceived(
@@ -397,6 +453,7 @@ class RaceBloc extends Bloc<RaceEvent, RaceState> {
         phase: RacePhase.settled,
         result: RaceDto.resultFromJson(event.payload),
         clearCountdown: true,
+        resultOverdue: false,
       ),
     );
   }
@@ -450,6 +507,7 @@ class RaceBloc extends Bloc<RaceEvent, RaceState> {
   Future<void> _stopClocks() async {
     await _stopSolveClock();
     await _stopSearchClock();
+    await _stopSilenceWatchdog();
   }
 
   @override
