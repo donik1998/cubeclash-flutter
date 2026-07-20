@@ -69,6 +69,16 @@ class TimerScrambleRequested extends TimerEvent {
   const TimerScrambleRequested();
 }
 
+/// The user picked a different scramble source (Random / WCA comps / Last used).
+class TimerScrambleSourceChanged extends TimerEvent {
+  const TimerScrambleSourceChanged(this.source);
+
+  final ScrambleSource source;
+
+  @override
+  List<Object?> get props => <Object?>[source];
+}
+
 class TimerEventChanged extends TimerEvent {
   const TimerEventChanged(this.event);
 

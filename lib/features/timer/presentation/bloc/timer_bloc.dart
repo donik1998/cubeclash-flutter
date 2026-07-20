@@ -8,6 +8,7 @@ import '../../../../core/error/failures.dart';
 import '../../../../core/error/result.dart';
 import '../../../../core/util/ticker.dart';
 import '../../domain/entities/penalty.dart';
+import '../../domain/entities/scramble_source.dart';
 import '../../domain/entities/solve.dart';
 import '../../domain/entities/timer_preferences.dart';
 import '../../domain/repositories/solve_repository.dart';
@@ -59,6 +60,7 @@ class TimerBloc extends Bloc<TimerEvent, TimerState> {
     on<TimerHoldTicked>(_onHoldTicked);
     on<TimerSessionUpdated>(_onSessionUpdated);
     on<TimerScrambleRequested>(_onScrambleRequested);
+    on<TimerScrambleSourceChanged>(_onScrambleSourceChanged);
     on<TimerEventChanged>(_onEventChanged);
     on<TimerPenaltyChanged>(_onPenaltyChanged);
     on<TimerPreferencesChanged>(_onPreferencesChanged);
@@ -338,8 +340,10 @@ class TimerBloc extends Bloc<TimerEvent, TimerState> {
         holdProgress: 0,
         lastSolve: optimistic,
         isSaving: true,
-        // A fresh scramble is proposed after every completed solve.
+        // A fresh scramble is proposed after every completed solve; the one
+        // just solved becomes what `Last used` re-serves.
         scramble: _newScramble(state.event),
+        previousScramble: optimistic.scramble,
       ),
     );
 
@@ -381,9 +385,47 @@ class TimerBloc extends Bloc<TimerEvent, TimerState> {
     final String scramble = _generateScramble(event);
     _analytics.capture(
       'scramble_generated',
-      properties: <String, Object?>{'event': event},
+      properties: <String, Object?>{
+        'event': event,
+        'source': state.scrambleSource.wire,
+      },
     );
     return scramble;
+  }
+
+  /// Only `random` is generated locally. WCA-competition scrambles need a
+  /// dataset the MVP doesn't ship, so the segment is selectable but explains
+  /// itself rather than quietly serving a random scramble under a WCA label —
+  /// which would be a lie about provenance, and provenance is the whole point
+  /// of the control.
+  void _onScrambleSourceChanged(
+    TimerScrambleSourceChanged event,
+    Emitter<TimerState> emit,
+  ) {
+    if (state.isImmersive || event.source == state.scrambleSource) return;
+
+    switch (event.source) {
+      case ScrambleSource.random:
+        emit(
+          state.copyWith(
+            scrambleSource: event.source,
+            scramble: _newScramble(state.event),
+            previousScramble: state.scramble,
+          ),
+        );
+      case ScrambleSource.reused:
+        final String? previous = state.previousScramble;
+        emit(
+          state.copyWith(
+            scrambleSource: event.source,
+            // Nothing solved yet this session — keep what's on screen rather
+            // than blanking the card.
+            scramble: previous ?? state.scramble,
+          ),
+        );
+      case ScrambleSource.wca:
+        emit(state.copyWith(scrambleSource: event.source));
+    }
   }
 
   void _onScrambleRequested(

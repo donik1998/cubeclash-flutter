@@ -5,6 +5,7 @@ import '../di/injection.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
+import '../widgets/app_icon.dart';
 import 'immersive_controller.dart';
 
 /// Identifies the nav item's motion wrapper, so tests can assert on the
@@ -48,10 +49,10 @@ class ScaffoldWithNavBar extends StatefulWidget {
 class _ScaffoldWithNavBarState extends State<ScaffoldWithNavBar>
     with SingleTickerProviderStateMixin {
   static const List<_TabSpec> _tabs = <_TabSpec>[
-    _TabSpec('Timer', Icons.timer_outlined, Icons.timer),
-    _TabSpec('Race', Icons.bolt_outlined, Icons.bolt),
-    _TabSpec('Stats', Icons.bar_chart_outlined, Icons.bar_chart),
-    _TabSpec('You', Icons.person_outline, Icons.person),
+    _TabSpec('Timer', AppIcons.navTimer),
+    _TabSpec('Race', AppIcons.navRace),
+    _TabSpec('Stats', AppIcons.navStats),
+    _TabSpec('You', AppIcons.navYou),
   ];
 
   /// Pill travel. The icon finishes marginally earlier (see [_iconWindow]).
@@ -127,50 +128,62 @@ class _ScaffoldWithNavBarState extends State<ScaffoldWithNavBar>
     final bool reduceMotion = MediaQuery.disableAnimationsOf(context);
     final int selected = widget.navigationShell.currentIndex;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.bgSurface,
-        border: Border(top: BorderSide(color: colors.borderSubtle)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: AppSpacing.sm,
+    // Figma `navwrap` → `Nav/Bottom`: the bar floats as a rounded card inset
+    // from the screen edges, over the canvas — it is not a full-width bar
+    // pinned to the bottom with a divider.
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.xs,
+          AppSpacing.lg,
+          AppSpacing.xl,
+        ),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: colors.bgSurface,
+            borderRadius: BorderRadius.circular(AppRadius.xl),
+            border: Border.all(color: colors.borderSubtle),
           ),
-          child: SizedBox(
-            height: 56,
-            child: AnimatedBuilder(
-              animation: _controller,
-              builder: (BuildContext context, _) => Stack(
-                children: <Widget>[
-                  _Pill(
-                    fromIndex: _fromIndex,
-                    toIndex: _toIndex,
-                    selectedIndex: selected,
-                    tabCount: _tabs.length,
-                    progress: _controller.value,
-                    reduceMotion: reduceMotion,
-                    color: colors.brandPrimarySoft,
-                  ),
-                  Row(
-                    children: <Widget>[
-                      for (int i = 0; i < _tabs.length; i++)
-                        Expanded(
-                          child: _NavItem(
-                            spec: _tabs[i],
-                            selected: selected == i,
-                            // Only the tab being moved *to* animates.
-                            animation: i == _toIndex ? _controller : null,
-                            direction: _direction,
-                            reduceMotion: reduceMotion,
-                            onTap: () => _onTap(i),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.md,
+            ),
+            child: SizedBox(
+              height: 52,
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (BuildContext context, _) => Stack(
+                  children: <Widget>[
+                    _Pill(
+                      fromIndex: _fromIndex,
+                      toIndex: _toIndex,
+                      selectedIndex: selected,
+                      tabCount: _tabs.length,
+                      progress: _controller.value,
+                      reduceMotion: reduceMotion,
+                      color: colors.brandPrimarySoft,
+                    ),
+                    Row(
+                      children: <Widget>[
+                        for (int i = 0; i < _tabs.length; i++)
+                          Expanded(
+                            child: _NavItem(
+                              spec: _tabs[i],
+                              selected: selected == i,
+                              // Only the tab being moved *to* animates.
+                              animation: i == _toIndex ? _controller : null,
+                              direction: _direction,
+                              reduceMotion: reduceMotion,
+                              onTap: () => _onTap(i),
+                            ),
                           ),
-                        ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -268,11 +281,12 @@ class _Pill extends StatelessWidget {
 }
 
 class _TabSpec {
-  const _TabSpec(this.label, this.icon, this.activeIcon);
+  const _TabSpec(this.label, this.icon);
 
   final String label;
-  final IconData icon;
-  final IconData activeIcon;
+
+  /// Exported from Figma — one asset, tinted per state.
+  final AppIcons icon;
 }
 
 class _NavItem extends StatelessWidget {
@@ -299,11 +313,7 @@ class _NavItem extends StatelessWidget {
     final AppColors colors = context.colors;
     final Color tint = selected ? colors.brandPrimary : colors.textMuted;
 
-    Widget icon = Icon(
-      selected ? spec.activeIcon : spec.icon,
-      size: 24,
-      color: tint,
-    );
+    Widget icon = AppIcon(spec.icon, size: 24, color: tint);
 
     final Animation<double>? anim = animation;
     if (!reduceMotion && selected && anim != null && anim.value < 1) {

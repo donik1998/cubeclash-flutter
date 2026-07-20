@@ -31,6 +31,7 @@ dependencies:
   socket_io_client: ^2.0.3
   shared_preferences: ^2.5.5
   flutter_secure_storage: ^10.3.1
+  flutter_svg: ^2.3.0
 
   # NOTE: Noto Serif is **bundled** (see `flutter: fonts:` below) rather than
   # pulled at runtime via google_fonts. google_fonts fetches the TTF over the
@@ -75,5 +76,5 @@ flutter:
     - family: Noto Serif
       fonts:
         - asset: assets/fonts/NotoSerif-Variable.ttf
-  # assets:
-  #   - assets/
+  assets:
+    - assets/icons/

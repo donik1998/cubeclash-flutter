@@ -97,6 +97,45 @@ class AppTypography {
     fontWeight: FontWeight.w500,
   );
 
+  /// ExtraBold 78 — the timer hero (Figma `21:72`).
+  ///
+  /// Larger than [display]'s 60: the frame sizes the readout to be legible
+  /// from across a table, which is where a phone sits during a solve. Tabular
+  /// by default, since it only ever renders a time.
+  static const TextStyle timerHero = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 78,
+    fontWeight: FontWeight.w800,
+    fontFeatures: _tabularFigures,
+  );
+
+  /// Bold 22 — the value on a session stat card (Figma `21:78`).
+  static const TextStyle miniStat = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 22,
+    fontWeight: FontWeight.w700,
+  );
+
+  /// Medium 15 — the timer's state label (Figma `21:75`).
+  static const TextStyle stateLabel = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 15,
+    fontWeight: FontWeight.w500,
+  );
+
+  /// Medium 19/28 — the scramble itself.
+  ///
+  /// Off the standard scale, from the Figma frame (`Timer Home → scramble`).
+  /// It earns the exception: this is the one string a cuber reads mid-turn,
+  /// with the phone on a table at arm's length, so it is sized for that rather
+  /// than for the body role it would otherwise take.
+  static const TextStyle scramble = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 19,
+    height: 28 / 19,
+    fontWeight: FontWeight.w500,
+  );
+
   /// SemiBold 11/16, +8% tracking — section eyebrows (`SCRAMBLE`).
   static const TextStyle overline = TextStyle(
     fontFamily: fontFamily,

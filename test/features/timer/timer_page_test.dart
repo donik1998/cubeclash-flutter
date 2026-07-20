@@ -54,20 +54,6 @@ void main() {
 
   const String scramble = "R U R' U' F2 D B L2 F R' D2 U B2 L F' R2 D' L B U2";
 
-  /// Whether the penalty row is currently accepting taps. Scoped to
-  /// [PenaltyControls] — the framework wraps plenty of its own IgnorePointers
-  /// around a page, so an unscoped finder matches several.
-  bool penaltyControlsDisabled(WidgetTester tester) => tester
-      .widget<IgnorePointer>(
-        find
-            .descendant(
-              of: find.byType(PenaltyControls),
-              matching: find.byType(IgnorePointer),
-            )
-            .first,
-      )
-      .ignoring;
-
   group('idle', () {
     testWidgets('shows scramble, prompt and empty-session copy',
         (WidgetTester tester) async {
@@ -76,21 +62,32 @@ void main() {
         const TimerState(scramble: scramble),
       );
 
-      expect(find.text('SCRAMBLE'), findsOneWidget);
+      // Figma `Timer Home`: scramble-source segments, the scramble itself,
+      // the source caption and a New pill — no `SCRAMBLE` eyebrow.
+      expect(find.text('Random'), findsOneWidget);
+      expect(find.text('WCA comps'), findsOneWidget);
+      expect(find.text('Last used'), findsOneWidget);
       expect(find.text(scramble), findsOneWidget);
+      expect(find.text('Random scramble'), findsOneWidget);
+      expect(find.text('New'), findsOneWidget);
+
       expect(find.text('Hold to start'), findsOneWidget);
       expect(find.text('0.00'), findsOneWidget);
-      expect(
-        find.text('Your session starts with your first solve.'),
-        findsOneWidget,
-      );
+
+      // Session stat cards, empty until there are solves.
+      expect(find.text('best'), findsOneWidget);
+      expect(find.text('ao5'), findsOneWidget);
+      expect(find.text('ao12'), findsOneWidget);
+      expect(find.text('—'), findsNWidgets(3));
     });
 
-    testWidgets('penalty controls are inert before any solve',
+    testWidgets('penalty controls are absent before any solve',
         (WidgetTester tester) async {
       await pumpWithState(tester, const TimerState(scramble: scramble));
 
-      expect(penaltyControlsDisabled(tester), isTrue);
+      // The frame shows no penalty row at idle — there is nothing to penalise,
+      // so it isn't rendered at all rather than rendered and dimmed.
+      expect(find.byType(PenaltyControls), findsNothing);
     });
   });
 
@@ -190,12 +187,12 @@ void main() {
       expect(find.text('14.34+'), findsOneWidget);
       expect(find.text('Tap to reset'), findsOneWidget);
 
-      expect(penaltyControlsDisabled(tester), isFalse);
+      expect(find.byType(PenaltyControls), findsOneWidget);
     });
   });
 
-  group('session strip', () {
-    testWidgets('lists recent solves with running averages',
+  group('session stats', () {
+    testWidgets('shows best, ao5 and ao12 for the session',
         (WidgetTester tester) async {
       final List<Solve> solves = <Solve>[
         for (int i = 0; i < 5; i++)
@@ -213,14 +210,11 @@ void main() {
         TimerState(scramble: scramble, sessionSolves: solves),
       );
 
-      expect(find.text('Ao5'), findsOneWidget);
-      // Each of the five solves gets a pill, newest first.
-      expect(find.text('14.00'), findsOneWidget);
+      // best = the fastest of 10…14.
       expect(find.text('10.00'), findsOneWidget);
-      // Ao5 trims 10.00 and 14.00 and means 11/12/13 → 12.00, which therefore
-      // appears twice: once as a solve pill, once as the average.
-      expect(find.text('12.00'), findsNWidgets(2));
-      // Ao12 needs 12 solves — until then it reads as "not yet", not zero.
+      // ao5 trims 10.00 and 14.00, means 11/12/13.
+      expect(find.text('12.00'), findsOneWidget);
+      // ao12 needs twelve solves — until then it reads as "not yet", not zero.
       expect(find.text('—'), findsOneWidget);
     });
   });

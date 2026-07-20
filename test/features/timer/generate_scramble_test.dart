@@ -192,6 +192,42 @@ void main() {
       );
     });
 
+    test('scrambles 4x4, including wide turns', () {
+      final GenerateScramble generate = GenerateScramble(random: Random(11));
+      final String scramble = generate('4x4');
+      final List<String> moves = movesOf(scramble);
+
+      expect(moves, hasLength(PuzzleSpec.cube4x4.moveCount));
+      expect(
+        GenerateScramble.isValidScramble(scramble, PuzzleSpec.cube4x4),
+        isTrue,
+        reason: scramble,
+      );
+      expect(
+        moves.any((String m) => m.startsWith(RegExp('[UDLRFB]w'))),
+        isTrue,
+        reason: 'a 4x4 scramble without wide turns is not a 4x4 scramble',
+      );
+    });
+
+    test('4x4 tokens parse longest-face-first, so Rw2 is Rw + 2', () {
+      // A naive single-character parser reads this as face `R`, modifier `w2`.
+      expect(
+        GenerateScramble.isValidScramble(
+          <String>['Rw2', ...List<String>.filled(39, 'U')].join(' '),
+          PuzzleSpec.cube4x4,
+        ),
+        isFalse,
+        reason: 'the repeated U tail is illegal — but it must fail on *that*, '
+            'having parsed Rw2 correctly first',
+      );
+      expect(
+        GenerateScramble.isValidScramble('Rw2 U', PuzzleSpec.cube2x2),
+        isFalse,
+        reason: '2x2 has no wide turns',
+      );
+    });
+
     test('throws loudly for an event with no scrambler', () {
       final GenerateScramble generate = GenerateScramble(random: Random(8));
       expect(() => generate('megaminx'), throwsArgumentError);

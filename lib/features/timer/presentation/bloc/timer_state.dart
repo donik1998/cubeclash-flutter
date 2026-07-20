@@ -28,6 +28,8 @@ class TimerState extends Equatable {
     this.status = TimerStatus.idle,
     this.event = '3x3',
     this.scramble = '',
+    this.scrambleSource = ScrambleSource.random,
+    this.previousScramble,
     this.elapsed = Duration.zero,
     this.inspectionElapsed = Duration.zero,
     this.holdProgress = 0,
@@ -41,6 +43,12 @@ class TimerState extends Equatable {
   final TimerStatus status;
   final String event;
   final String scramble;
+
+  /// Which source the scramble card is showing (Figma: `scrtabs`).
+  final ScrambleSource scrambleSource;
+
+  /// The scramble before the current one — what `Last used` re-serves.
+  final String? previousScramble;
 
   /// Solve time so far (or final, once stopped).
   final Duration elapsed;
@@ -97,6 +105,8 @@ class TimerState extends Equatable {
     TimerStatus? status,
     String? event,
     String? scramble,
+    ScrambleSource? scrambleSource,
+    String? previousScramble,
     Duration? elapsed,
     Duration? inspectionElapsed,
     double? holdProgress,
@@ -114,6 +124,8 @@ class TimerState extends Equatable {
         status: status ?? this.status,
         event: event ?? this.event,
         scramble: scramble ?? this.scramble,
+        scrambleSource: scrambleSource ?? this.scrambleSource,
+        previousScramble: previousScramble ?? this.previousScramble,
         elapsed: elapsed ?? this.elapsed,
         inspectionElapsed: inspectionElapsed ?? this.inspectionElapsed,
         holdProgress: holdProgress ?? this.holdProgress,
@@ -129,6 +141,8 @@ class TimerState extends Equatable {
         status,
         event,
         scramble,
+        scrambleSource,
+        previousScramble,
         elapsed,
         inspectionElapsed,
         holdProgress,

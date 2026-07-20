@@ -65,9 +65,29 @@ class PuzzleSpec {
     moveCount: 11,
   );
 
+  /// 4×4 — adds **wide** turns (`Rw` turns the outer two layers together).
+  ///
+  /// Wide and outer turns on one axis are listed as separate faces in the same
+  /// group, which makes the existing rules do the right thing: `R` never
+  /// follows `R`, and no three consecutive moves share an axis. That is
+  /// slightly stricter than strictly necessary — `R Rw` is not reducible,
+  /// since `Rw` includes the `R` layer — but a scrambler that occasionally
+  /// declines a legal sequence is a much better failure than one that emits a
+  /// reducible scramble.
+  static const PuzzleSpec cube4x4 = PuzzleSpec(
+    event: '4x4',
+    axes: <List<String>>[
+      <String>['U', 'Uw', 'D', 'Dw'],
+      <String>['L', 'Lw', 'R', 'Rw'],
+      <String>['F', 'Fw', 'B', 'Bw'],
+    ],
+    moveCount: 40,
+  );
+
   /// Every puzzle the scrambler can currently produce, by event id.
   static const Map<String, PuzzleSpec> byEvent = <String, PuzzleSpec>{
     '3x3': cube3x3,
     '2x2': cube2x2,
+    '4x4': cube4x4,
   };
 }

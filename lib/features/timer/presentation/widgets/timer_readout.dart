@@ -48,7 +48,7 @@ class TimerReadout extends StatelessWidget {
       timeMs: state.elapsed.inMilliseconds,
       isPlus2: showPenalty && penalty == Penalty.plus2,
       isDnf: showPenalty && penalty == Penalty.dnf,
-      style: AppTypography.display,
+      style: AppTypography.timerHero,
       // Green while armed is the single most important affordance on this
       // screen: it is what tells the user the release will start the timer.
       color: armed ? colors.statusSuccess : null,
@@ -88,7 +88,7 @@ class _InspectionCountdown extends StatelessWidget {
 
     return Text(
       text,
-      style: AppTypography.display.copyWith(color: color),
+      style: AppTypography.timerHero.copyWith(color: color),
       semanticsLabel: switch (text) {
         'DNF' => 'Inspection exceeded, did not finish',
         '+2' => 'Inspection exceeded, plus two',
@@ -109,12 +109,15 @@ class _StateLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppColors colors = context.colors;
 
-    final (String label, Color color) = switch (state.status) {
+    final TimerStatus status = state.status;
+    final (String label, Color color) = switch (status) {
+      // The frame shows a green dot at idle: the timer is ready, which is a
+      // more useful thing to signal than "inactive".
       TimerStatus.idle => (
           state.preferences.style == TimerStyle.hold
               ? 'Hold to start'
               : 'Tap to start',
-          colors.textMuted,
+          colors.statusSuccess,
         ),
       TimerStatus.inspecting => (
           state.preferences.style == TimerStyle.hold
@@ -136,7 +139,13 @@ class _StateLabel extends StatelessWidget {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: AppSpacing.sm),
-        Text(label, style: AppTypography.label.copyWith(color: color)),
+        Text(
+          label,
+          style: AppTypography.stateLabel.copyWith(
+            // The dot carries the state colour; the label stays readable.
+            color: status == TimerStatus.idle ? colors.textSecondary : color,
+          ),
+        ),
       ],
     );
   }

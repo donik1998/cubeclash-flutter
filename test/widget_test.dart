@@ -33,7 +33,7 @@ void main() {
     expect(find.text('CubeClash'), findsOneWidget);
     expect(find.text('Create an account'), findsOneWidget);
     // No shell, so no nav bar.
-    expect(find.byIcon(Icons.timer), findsNothing);
+    expect(find.text('Stats'), findsNothing);
   });
 
   testWidgets('a signed-in launch lands on the Timer tab with the 4-tab shell',
@@ -51,14 +51,13 @@ void main() {
 
     // A scramble is proposed immediately — the user can start solving on the
     // first frame without waiting on anything.
-    expect(find.text('SCRAMBLE'), findsOneWidget);
+    expect(find.text('Random scramble'), findsOneWidget);
 
-    // All four bottom-nav destinations render (selected tab shows its filled
-    // icon; the rest show their outlined icons).
-    expect(find.byIcon(Icons.timer), findsOneWidget);
-    expect(find.byIcon(Icons.bolt_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.bar_chart_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.person_outline), findsOneWidget);
+    // All four bottom-nav destinations render. Asserted by label rather than
+    // icon: the icons are now exported Figma SVGs, not Material glyphs.
+    for (final String tab in <String>['Timer', 'Race', 'Stats', 'You']) {
+      expect(find.text(tab), findsWidgets, reason: '$tab tab is missing');
+    }
   });
 
   testWidgets('losing the session mid-run bounces back to auth',

@@ -103,6 +103,21 @@ class GenerateScramble {
   }) =>
       _isLegal(spec, face, lastFace, secondLastFace);
 
+  /// The face a token starts with, longest match first, or `null` if it starts
+  /// with no known face.
+  ///
+  /// Longest-first matters on 4×4: `Rw2` must resolve to the face `Rw`, not to
+  /// `R` with a nonsense `w2` modifier.
+  static String? _faceOf(String token, PuzzleSpec spec) {
+    final List<String> faces = spec.faces.toList()
+      ..sort((String a, String b) => b.length.compareTo(a.length));
+
+    for (final String face in faces) {
+      if (token.startsWith(face)) return face;
+    }
+    return null;
+  }
+
   /// Validates a whole scramble string against the same rules.
   static bool isValidScramble(String scramble, PuzzleSpec spec) {
     final List<String> tokens =
@@ -113,9 +128,12 @@ class GenerateScramble {
     String? secondLastFace;
 
     for (final String token in tokens) {
-      final String face = token[0];
-      final String modifier = token.substring(1);
-      if (spec.axisOf(face) == -1) return false;
+      // Longest-match, because a face can be more than one character: on 4×4,
+      // `Rw2` is the face `Rw` with modifier `2`, not `R` + `w2`.
+      final String? face = _faceOf(token, spec);
+      if (face == null) return false;
+
+      final String modifier = token.substring(face.length);
       if (!spec.modifiers.contains(modifier)) return false;
       if (!_isLegal(spec, face, lastFace, secondLastFace)) return false;
 
