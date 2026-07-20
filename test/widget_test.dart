@@ -2,7 +2,6 @@ import 'package:cubeclash/app.dart';
 import 'package:cubeclash/core/di/injection.dart';
 import 'package:cubeclash/core/network/auth_interceptor.dart';
 import 'package:cubeclash/features/profile/domain/repositories/profile_repository.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/harness.dart';
