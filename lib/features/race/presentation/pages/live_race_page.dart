@@ -10,16 +10,18 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../domain/entities/race_room.dart';
 import '../bloc/race_bloc.dart';
-import '../widgets/race_widgets.dart';
+import '../widgets/race_versus.dart';
 
-/// Live Race — `/race/live`, **full-screen and outside the shell**.
+/// The in-race screen — `/race/live`, **full-screen and outside the shell**.
 ///
-/// A real route rather than a state of the lobby: this is a different screen
-/// you are taken to, the nav bar must not exist while you're in it, and the
-/// back gesture must not work mid-solve.
+/// Five phases share one layout ([RaceVersusScaffold]): the ready check, the
+/// countdown, the solve, the wait for the opponent, and the settled result.
+/// The Figma frames draw them as one screen whose lower half swaps, so that is
+/// how they are built — the two clocks never move.
 ///
-/// Renders four phases — countdown, racing, submitted (waiting on them), and
-/// the settled result.
+/// The ready check lives here rather than in the Race tab because the frame
+/// gives it this screen's chrome and no nav bar: once you are matched with
+/// someone, wandering off via a tab strands them.
 class LiveRacePage extends StatelessWidget {
   const LiveRacePage({super.key});
 
@@ -48,16 +50,20 @@ class _LiveRaceView extends StatelessWidget {
       builder: (BuildContext context, RaceState state) {
         return PopScope(
           // No escape mid-solve. Leaving a live race has to be deliberate, and
-          // the result screen is where you leave from.
+          // the × in the header is where you leave from.
           canPop: state.phase == RacePhase.settled,
           child: Scaffold(
             backgroundColor: colors.bgCanvas,
             body: SafeArea(
               child: switch (state.phase) {
-                RacePhase.countdown => _Countdown(state: state),
+                RacePhase.readyCheck =>
+                  _InRace(state: state, stage: _Ready(state: state)),
+                RacePhase.countdown =>
+                  _InRace(state: state, stage: _Countdown(state: state)),
                 RacePhase.racing => _Racing(state: state),
-                RacePhase.submitted => _WaitingForOpponent(state: state),
-                RacePhase.settled => _Result(state: state),
+                RacePhase.submitted =>
+                  _InRace(state: state, stage: _Waiting(state: state)),
+                RacePhase.settled => _Settled(state: state),
                 // Any other phase here means the race ended from under us.
                 _ => const LoadingState(),
               },
@@ -65,6 +71,132 @@ class _LiveRaceView extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Binds [RaceVersusScaffold] to the bloc state for every phase but the
+/// settled one, which has its own times and highlighting.
+class _InRace extends StatelessWidget {
+  const _InRace({required this.state, required this.stage});
+
+  final RaceState state;
+  final Widget stage;
+
+  @override
+  Widget build(BuildContext context) {
+    final RaceBloc bloc = context.read<RaceBloc>();
+    final RacePlayer? them = state.opponent;
+
+    // Nobody has a time until the solve starts. Reading the room's progress
+    // before then would surface a stale value from the previous race — the
+    // frames show 0.00 / 0.00 through the ready check and countdown, and that
+    // is also the only honest thing to show.
+    final bool started =
+        state.phase == RacePhase.racing || state.phase == RacePhase.submitted;
+
+    return RaceVersusScaffold(
+      you: state.you,
+      opponent: them,
+      scramble: state.scramble,
+      // Your own clock: live while solving, frozen at your submitted time once
+      // you've stopped.
+      yourTimeMs: !started
+          ? null
+          : state.phase == RacePhase.racing
+              ? state.elapsed.inMilliseconds
+              : state.yourTimeMs,
+      opponentTimeMs: started ? (them?.finalTimeMs ?? them?.progressMs) : null,
+      banner: state.disconnected ? const _ConnectionBanner() : null,
+      // Leaving is only offered where it is actually possible. During the
+      // countdown and the solve the race is in flight — that is precisely what
+      // the PopScope above is guarding — and while racing the whole surface is
+      // the stop button anyway, so a × there could never be tapped.
+      onClose: state.phase == RacePhase.readyCheck
+          ? () => bloc.add(const RaceCancelled())
+          : null,
+      stage: stage,
+    );
+  }
+}
+
+// --- Ready check -------------------------------------------------------------
+
+class _Ready extends StatelessWidget {
+  const _Ready({required this.state});
+
+  final RaceState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors colors = context.colors;
+    final RaceBloc bloc = context.read<RaceBloc>();
+    final bool youReady = state.you?.ready ?? false;
+    final RacePlayer? them = state.opponent;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(
+          'READY UP?',
+          style: AppTypography.overline.copyWith(color: colors.textMuted),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: <Widget>[
+            _ReadyChip(
+              label: youReady ? 'You: ready' : 'You: not ready',
+              ready: youReady,
+            ),
+            if (them != null)
+              _ReadyChip(
+                label: them.ready
+                    ? '${them.displayName}: ready'
+                    : '${them.displayName}: not ready',
+                ready: them.ready,
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        AppButton(
+          label: youReady ? 'Waiting for them…' : "I'm ready",
+          expand: false,
+          onPressed: youReady ? null : () => bloc.add(const RaceReadyPressed()),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReadyChip extends StatelessWidget {
+  const _ReadyChip({required this.label, required this.ready});
+
+  final String label;
+  final bool ready;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors colors = context.colors;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: colors.bgSurfaceAlt,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(color: colors.borderSubtle),
+      ),
+      child: Text(
+        label,
+        style: AppTypography.pillLabel.copyWith(
+          color: ready ? colors.statusSuccess : colors.textSecondary,
+        ),
+      ),
     );
   }
 }
@@ -81,26 +213,14 @@ class _Countdown extends StatelessWidget {
     final AppColors colors = context.colors;
     final int n = state.countdown ?? 3;
 
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: <Widget>[
-          Text(
-            n == 0 ? 'GO' : '$n',
-            // The key restarts the scale-in on every tick, so each number
-            // punches rather than crossfading into the last.
-            key: ValueKey<int>(n),
-            style: AppTypography.display.copyWith(
-              fontSize: 120,
-              color: n == 0 ? colors.statusSuccess : colors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          Text(
-            'Same scramble for both of you',
-            style: AppTypography.small.copyWith(color: colors.textMuted),
-          ),
-        ],
+    return Text(
+      n == 0 ? 'GO' : '$n',
+      // The key restarts the scale-in on every tick, so each number punches
+      // rather than crossfading into the last.
+      key: ValueKey<int>(n),
+      style: AppTypography.display.copyWith(
+        fontSize: 96,
+        color: n == 0 ? colors.statusSuccess : colors.textPrimary,
       ),
     );
   }
@@ -115,7 +235,6 @@ class _Racing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final AppColors colors = context.colors;
     final RaceBloc bloc = context.read<RaceBloc>();
 
     return Listener(
@@ -125,52 +244,12 @@ class _Racing extends StatelessWidget {
         HapticFeedback.selectionClick();
         bloc.add(const RaceSolveStopped());
       },
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          children: <Widget>[
-            if (state.disconnected) const _ConnectionBanner(),
-            AppCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    'SCRAMBLE',
-                    style: AppTypography.overline
-                        .copyWith(color: colors.textMuted),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    state.scramble,
-                    style: AppTypography.small.copyWith(
-                      color: colors.textPrimary,
-                      letterSpacing: 0.6,
-                      height: 1.6,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Center(
-                child: TimeText(
-                  timeMs: state.elapsed.inMilliseconds,
-                  style: AppTypography.display,
-                ),
-              ),
-            ),
-            OpponentProgressBar(
-              opponent: state.opponent,
-              yourElapsed: state.elapsed,
-              reconnecting: state.opponentReconnecting,
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            Text(
-              'Tap anywhere to stop',
-              style: AppTypography.caption.copyWith(color: colors.textMuted),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-          ],
+      child: _InRace(
+        state: state,
+        stage: Text(
+          'Tap anywhere to stop',
+          style: AppTypography.stagePrompt
+              .copyWith(color: context.colors.textSecondary),
         ),
       ),
     );
@@ -179,64 +258,42 @@ class _Racing extends StatelessWidget {
 
 // --- Submitted, waiting on the opponent --------------------------------------
 
-class _WaitingForOpponent extends StatelessWidget {
-  const _WaitingForOpponent({required this.state});
+class _Waiting extends StatelessWidget {
+  const _Waiting({required this.state});
 
   final RaceState state;
 
   @override
   Widget build(BuildContext context) {
     final AppColors colors = context.colors;
+    final bool dropped = state.opponentReconnecting;
 
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Column(
-        children: <Widget>[
-          if (state.disconnected) const _ConnectionBanner(),
-          const Spacer(),
-          Text(
-            'YOUR TIME',
-            style: AppTypography.overline.copyWith(color: colors.textMuted),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(
+          dropped
+              ? 'Your opponent dropped — waiting for them to reconnect'
+              : 'Waiting for your opponent to finish',
+          textAlign: TextAlign.center,
+          style: AppTypography.stagePrompt.copyWith(
+            color: dropped ? colors.statusWarning : colors.textSecondary,
           ),
-          const SizedBox(height: AppSpacing.sm),
-          TimeText(
-            timeMs: state.yourTimeMs ?? 0,
-            style: AppTypography.display,
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          Text(
-            state.opponentReconnecting
-                ? 'Your opponent dropped — waiting for them to reconnect'
-                : 'Waiting for your opponent to finish',
-            textAlign: TextAlign.center,
-            style: AppTypography.body.copyWith(
-              color: state.opponentReconnecting
-                  ? colors.statusWarning
-                  : colors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          OpponentProgressBar(
-            opponent: state.opponent,
-            yourElapsed: Duration(milliseconds: state.yourTimeMs ?? 0),
-            reconnecting: state.opponentReconnecting,
-          ),
-          const Spacer(),
-          Text(
-            'The server decides the result.',
-            style: AppTypography.caption.copyWith(color: colors.textMuted),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-        ],
-      ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Text(
+          'The server decides the result.',
+          style: AppTypography.caption.copyWith(color: colors.textMuted),
+        ),
+      ],
     );
   }
 }
 
-// --- Screens 11 & 12: Result -------------------------------------------------
+// --- Settled -----------------------------------------------------------------
 
-class _Result extends StatelessWidget {
-  const _Result({required this.state});
+class _Settled extends StatelessWidget {
+  const _Settled({required this.state});
 
   final RaceState state;
 
@@ -248,156 +305,99 @@ class _Result extends StatelessWidget {
 
     if (result == null) return const LoadingState();
 
-    final bool won = result.isWin;
-    final Color accent = switch (result.outcome) {
-      RaceOutcome.win => colors.statusSuccess,
-      RaceOutcome.dnf => colors.statusWarning,
-      _ => colors.statusDanger,
+    final (String headline, Color accent) = switch (result.outcome) {
+      RaceOutcome.win => ('YOU WIN', colors.statusSuccess),
+      RaceOutcome.loss => ('YOU LOSE', colors.statusDanger),
+      RaceOutcome.dnf => ('NO RESULT', colors.statusWarning),
+      RaceOutcome.left => ('YOU LEFT', colors.statusDanger),
     };
 
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: Column(
+    // Straight off `race:result`. The client never works out who won.
+    final RaceVersusSide? winner = switch (result.outcome) {
+      RaceOutcome.win => RaceVersusSide.you,
+      RaceOutcome.loss => RaceVersusSide.opponent,
+      _ => null,
+    };
+
+    return RaceVersusScaffold(
+      you: state.you,
+      opponent: state.opponent,
+      scramble: state.scramble,
+      yourTimeMs: result.yourTimeMs,
+      opponentTimeMs: result.opponentTimeMs,
+      yourDnf: result.yourDnf,
+      opponentDnf: result.opponentDnf || result.opponentLeft,
+      winner: winner,
+      onClose: () => bloc.add(const RaceDismissed()),
+      stage: Column(
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          const Spacer(),
-          Icon(
-            switch (result.outcome) {
-              RaceOutcome.win => Icons.emoji_events,
-              RaceOutcome.dnf => Icons.remove_circle_outline,
-              _ => Icons.flag_outlined,
-            },
-            size: 56,
-            color: accent,
+          Text(
+            headline,
+            textAlign: TextAlign.center,
+            style: AppTypography.resultHeadline.copyWith(color: accent),
           ),
           const SizedBox(height: AppSpacing.lg),
-          Text(
-            switch (result.outcome) {
-              RaceOutcome.win => result.opponentLeft ? 'Win by default' : 'Win',
-              RaceOutcome.dnf => 'No result',
-              RaceOutcome.left => 'You left',
-              RaceOutcome.loss => 'Loss',
-            },
-            style: AppTypography.h1.copyWith(color: accent),
-          ),
+          _Scoreline(result: result),
           if (result.opponentLeft) ...<Widget>[
             const SizedBox(height: AppSpacing.sm),
             Text(
               'Your opponent disconnected.',
-              style: AppTypography.small.copyWith(color: colors.textSecondary),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.x3),
-          _Scoreline(state: state, result: result),
-          if (result.deltaMs case final int delta) ...<Widget>[
-            const SizedBox(height: AppSpacing.lg),
-            Text(
-              won
-                  ? 'You won by ${TimeText.format(delta)}'
-                  : 'You lost by ${TimeText.format(delta)}',
-              style: AppTypography.body.copyWith(color: colors.textSecondary),
+              textAlign: TextAlign.center,
+              style: AppTypography.caption.copyWith(color: colors.textMuted),
             ),
           ],
           if (result.eloDelta case final int elo) ...<Widget>[
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.md),
             // Server-supplied. The client never computes a rating change.
             AppChip(
               label: '${elo >= 0 ? '+' : ''}$elo Elo',
               variant: elo >= 0 ? AppChipVariant.event : AppChipVariant.dnf,
             ),
           ],
-          const Spacer(),
-          AppButton(
-            label: 'Rematch',
-            icon: Icons.refresh,
-            onPressed: () => bloc.add(const RaceRematchRequested()),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          AppButton.secondary(
-            label: 'Back to lobby',
-            onPressed: () => bloc.add(const RaceDismissed()),
-          ),
           const SizedBox(height: AppSpacing.lg),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              AppButton(
+                label: 'Rematch',
+                expand: false,
+                onPressed: () => bloc.add(const RaceRematchRequested()),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              AppButton.secondary(
+                label: 'Lobby',
+                expand: false,
+                onPressed: () => bloc.add(const RaceDismissed()),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 }
 
+/// `8.42s  vs  8.77s` (Figma `34:194`).
 class _Scoreline extends StatelessWidget {
-  const _Scoreline({required this.state, required this.result});
+  const _Scoreline({required this.result});
 
-  final RaceState state;
   final RaceResult result;
 
   @override
   Widget build(BuildContext context) {
     final AppColors colors = context.colors;
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: <Widget>[
-        _Side(
-          label: 'You',
-          timeMs: result.yourTimeMs,
-          isDnf: result.yourDnf,
-          highlight: result.isWin,
-        ),
-        Text(
-          'vs',
-          style: AppTypography.body.copyWith(color: colors.textMuted),
-        ),
-        _Side(
-          label: state.opponent?.displayName ?? 'Opponent',
-          timeMs: result.opponentTimeMs,
-          isDnf: result.opponentDnf || result.opponentLeft,
-          highlight: !result.isWin && result.outcome == RaceOutcome.loss,
-        ),
-      ],
-    );
-  }
-}
+    String side(int? ms, bool dnf) =>
+        dnf || ms == null ? 'DNF' : '${TimeText.format(ms)}s';
 
-class _Side extends StatelessWidget {
-  const _Side({
-    required this.label,
-    required this.timeMs,
-    required this.isDnf,
-    required this.highlight,
-  });
-
-  final String label;
-  final int? timeMs;
-  final bool isDnf;
-  final bool highlight;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppColors colors = context.colors;
-
-    return SizedBox(
-      width: 130,
-      child: Column(
-        children: <Widget>[
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.caption.copyWith(color: colors.textMuted),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          if (isDnf || timeMs == null)
-            Text(
-              'DNF',
-              style: AppTypography.h2.copyWith(color: colors.statusDanger),
-            )
-          else
-            TimeText(
-              timeMs: timeMs!,
-              style: AppTypography.h2,
-              color: highlight ? colors.statusSuccess : colors.textPrimary,
-            ),
-        ],
-      ),
+    return Text(
+      '${side(result.yourTimeMs, result.yourDnf)}   vs   '
+      '${side(result.opponentTimeMs, result.opponentDnf || result.opponentLeft)}',
+      textAlign: TextAlign.center,
+      style: AppTypography.versusName
+          .copyWith(color: colors.textSecondary, fontWeight: FontWeight.w500)
+          .tabular,
     );
   }
 }
@@ -413,7 +413,6 @@ class _ConnectionBanner extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
         vertical: AppSpacing.sm,

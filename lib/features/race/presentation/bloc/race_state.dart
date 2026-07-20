@@ -74,7 +74,14 @@ class RaceState extends Equatable {
   RacePlayer? get opponent => room?.opponent;
 
   /// Full-screen, outside the shell.
+  ///
+  /// Starts at the **ready check**, not at the countdown: the Figma frame for
+  /// the ready room (`34:106`) has this screen's chrome and no nav bar. Once
+  /// you are matched with a real person, drifting off to another tab strands
+  /// them in a room waiting on a confirmation that is never coming, so leaving
+  /// is made deliberate — the × in the header — from that moment on.
   bool get isImmersive =>
+      phase == RacePhase.readyCheck ||
       phase == RacePhase.countdown ||
       phase == RacePhase.racing ||
       phase == RacePhase.submitted;

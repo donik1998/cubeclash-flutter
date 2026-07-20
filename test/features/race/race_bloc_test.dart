@@ -183,7 +183,8 @@ void main() {
 
       expect(bloc.state.phase, RacePhase.readyCheck);
       expect(bloc.state.room?.everyoneReady, isFalse);
-      expect(bloc.state.isImmersive, isFalse);
+      // Immersive from the ready check on — you are in a room with someone.
+      expect(bloc.state.isImmersive, isTrue);
     });
 
     test('both ready is reflected in the room', () async {

@@ -15,6 +15,12 @@ File key: `agaSWydXRtfQIiN112f6wG`
 | `nav-stats.svg` | `I21:87;18:50` | bottom nav (bars) |
 | `nav-you.svg` | `I21:87;18:62` | bottom nav (person) |
 
+The **Race** frames (`33:106`, `33:188`, `33:246`, `34:106`, `34:140`,
+`34:167`, `39:106`) add no icons. Their only vectors are plain filled circles —
+the live dot and the avatar placeholders — which are drawn with a
+`BoxDecoration`, since exporting a circle as an asset buys nothing. The `×`
+close affordance is the literal glyph at 22pt, not an icon.
+
 ## Re-exporting
 
 Figma's MCP asset URLs expire after ~7 days, so re-fetch rather than reusing

@@ -40,10 +40,13 @@ class AppSegmentedControl extends StatelessWidget {
         : (selectedIndex / (segments.length - 1)) * 2 - 1;
 
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.xs),
+      // Pill, not a rounded rectangle, and a tighter 3pt inset than the
+      // spacing scale's 4 — Figma `33:115`. Both the track and the thumb are
+      // fully rounded there.
+      padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         color: colors.segTrack,
-        borderRadius: BorderRadius.circular(AppRadius.md),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       child: Stack(
         children: <Widget>[
@@ -59,7 +62,7 @@ class AppSegmentedControl extends StatelessWidget {
                 child: Container(
                   decoration: BoxDecoration(
                     color: colors.segThumb,
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
                     boxShadow: <BoxShadow>[
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.10),
@@ -90,7 +93,10 @@ class AppSegmentedControl extends StatelessWidget {
                           segments[i],
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTypography.label.copyWith(
+                          // 12, not the label scale's 14 — three segments have
+                          // to fit `Quick Match` / `Private` / `Tournaments`
+                          // across a phone without ellipsing (Figma `33:117`).
+                          style: AppTypography.caption.copyWith(
                             color: i == selectedIndex
                                 ? colors.textPrimary
                                 : colors.textSecondary,

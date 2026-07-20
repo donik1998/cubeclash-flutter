@@ -101,11 +101,17 @@ void main() {
     );
   });
 
+  // The ready check is part of the full-screen race now, not a lobby state —
+  // the frame gives it the race chrome and no nav bar.
   testWidgets('ready room', (WidgetTester tester) async {
     await goldenFor(
       tester,
-      const RacePage(),
-      const RaceState(phase: RacePhase.readyCheck, room: room),
+      const LiveRacePage(),
+      const RaceState(
+        phase: RacePhase.readyCheck,
+        room: room,
+        connection: GatewayConnection.connected,
+      ),
       name: 'ready_room',
       settle: false,
     );
@@ -119,6 +125,7 @@ void main() {
         phase: RacePhase.countdown,
         countdown: 3,
         room: room,
+        connection: GatewayConnection.connected,
       ),
       name: 'countdown',
     );
@@ -146,6 +153,8 @@ void main() {
       const LiveRacePage(),
       const RaceState(
         phase: RacePhase.settled,
+        connection: GatewayConnection.connected,
+        scramble: "R U R' U' F2 L' B2 D2 R' F",
         yourTimeMs: 9870,
         room: room,
         result: RaceResult(
@@ -165,6 +174,8 @@ void main() {
       const LiveRacePage(),
       const RaceState(
         phase: RacePhase.settled,
+        connection: GatewayConnection.connected,
+        scramble: "R U R' U' F2 L' B2 D2 R' F",
         yourTimeMs: 13010,
         room: room,
         result: RaceResult(

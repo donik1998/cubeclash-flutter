@@ -47,10 +47,11 @@ Current state — **all phases (A–H) complete**, 382 tests green:
 - **Stats feature** — complete. My Stats (PB cards + hand-painted progress and
   distribution charts), Leaderboards (scope/metric filters, cursor paging,
   pinned current-user row), Player Profile with head-to-head.
-- **Race feature** — complete, event-aware. `RaceBloc` over the `/race` gateway with
-  disconnect, reconnect and idempotent-submit handling; lobby (quick/private/
-  tournaments), matchmaking modal, ready room, full-screen live race and both
-  result states.
+- **Race feature** — complete, event-aware, **matched to the Figma frames**.
+  `RaceBloc` over the `/race` gateway with disconnect, reconnect and
+  idempotent-submit handling; lobby (quick/private/tournaments), matchmaking
+  modal, and one full-screen in-race route covering ready check → countdown →
+  solve → result. See **The versus screen** below.
 - **You feature** — complete. Profile, Settings (persisted via
   shared_preferences; theme is bound to `SettingsCubit` above `MaterialApp`)
   and Friends. `feature_placeholder.dart` is gone — all four tabs are real.
@@ -207,15 +208,44 @@ Claude Code configuration for this repo:
 - **`settings.local.json`** — *personal, git-ignored.* Your machine-local permission scope — an allow / ask / deny list that lets the agent run project dev commands (flutter, dart, git, common shell tools) and edit files **without a prompt each time, bounded to this project**. Consequential actions (`git push`, `gh`) are set to *ask*; destructive ones (`sudo`, `rm -rf`, force-push, `reset --hard`) are *denied*. Widen or tighten it as you like — it never leaves your machine.
 - **`commands/`** — *shared, committed.* Slash commands: `/scaffold-feature`, `/run-checks`.
 
+## The versus screen (Figma `34:106` · `34:140` · `34:167` · `39:106`)
+
+The ready check, countdown, live solve and both result states are **one
+screen**, not four — `RaceVersusScaffold` in `race/presentation/widgets`. Same
+`LIVE RACE` header, same two player cards, same scramble line; only the `stage`
+filling the lower half changes. The two clocks holding still while the stage
+swaps is what makes it read as one continuous race.
+
+- **No hero timer, ever.** Both clocks render at the same size
+  (`AppTypography.versusTime`). Sizing your own larger turns a race back into a
+  solo solve with a footnote. There are no progress bars either.
+- **The ready check is immersive** — `RaceState.isImmersive` starts there, not
+  at the countdown, so the nav bar is gone from the moment you are matched with
+  a real person. Leaving is the explicit `×`, which fires `RaceCancelled`.
+- **The `×` is hidden during countdown/racing/submitted.** The race is in
+  flight, and while racing the whole surface is the stop button, so a close
+  affordance there could never be tapped.
+- **Both clocks read `0.00` until the solve starts** — reading the room's
+  `progressMs` earlier surfaces a stale value from the previous race.
+- **The scramble block renders only when `state.scramble` is non-empty.** The
+  ready-room frame shows a scramble; the protocol reveals it at GO and not
+  before, and handing it over during the ready check would give whoever opened
+  the app first a head start. The protocol wins; the block appears at GO.
+- Winner/loser styling comes straight off `race:result` — the success outline
+  and the dimmed card are driven by `RaceOutcome`, never by comparing times.
+- Countries are named in words (`countryCodeToName`, `core/util/country_names.dart`
+  — generated from ICU via `tool/gen_country_names.swift`, not hand-typed).
+
+**Deliberately not built from the frames**, because the data is server-owned
+and no endpoint carries it: the lobby's `Elo 1180 · #1,204` pill, the Quick
+Match `best / ao5 / win rate` row, and `RECENT RIVALS`. Tournament cards use
+the frame's layout but every one carries its `SOON` badge — the frame's first
+card advertises a `LIVE` tournament with 1,240 entrants, which would be a plain
+lie against a backend with no tournament endpoint.
+
 ## Pending work — prompts
 
-One piece is specced but not built, written to be pasted into a fresh session
-(see §9 of `IMPLEMENTATION_PROMPT.md` — one phase per session):
-
-- **`PROMPT_RACE_FIGMA.md`** — the Race screens were built before the Figma MCP
-  was reachable and don't match the frames. Live Race in particular is a
-  different screen (two side-by-side player cards with `VS`, no hero timer, no
-  progress bars). Presentation layer only; `RaceBloc` stays as-is.
+**`PROMPT_RACE_FIGMA.md` is done** — see **The versus screen** above.
 
 **`PROMPT_WCA_EVENTS.md` is done** — see **Event model** above. What it
 deliberately scoped out is the next piece of work: per-puzzle **random-state**
