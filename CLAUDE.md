@@ -22,7 +22,7 @@ Dependencies point inward: **presentation → domain ← data**.
 
 - `presentation/` — widgets + BLoC/Cubit. Renders state, dispatches events. No business logic.
 - `domain/` — pure Dart: entities, use cases, repository interfaces. **No Flutter/IO imports** (keep it unit-testable).
-- `data/` — repository implementations + data sources (remote: Dio, local: Drift). Maps DTOs ↔ entities.
+- `data/` — repository implementations + data sources (remote: Dio, local: SharedPreferences). Maps DTOs ↔ entities.
 
 ## Folder map
 
@@ -37,7 +37,10 @@ test/
   **/goldens/*.png          goldens live next to their test file
 ```
 
-Current state — **all phases (A–H) complete**, 398 tests green:
+Current state — **all phases (A–H) complete**, 477 tests green. Solves and the
+selected event **persist locally** across a relaunch (SharedPreferences,
+`LocalSolveStore` — see **Offline** below), and **all 17 events produce real
+scrambles**. The client is feature-complete and waiting on `cubeclash-backend`:
 
 - **Component library** (`core/widgets`) — built, golden-tested light + dark.
 - **Timer feature** — complete, across **all 17 WCA events**. Local scrambler
@@ -52,7 +55,11 @@ Current state — **all phases (A–H) complete**, 398 tests green:
   idempotent-submit handling; lobby (quick/private/tournaments), matchmaking
   modal, and one full-screen in-race route covering ready check → countdown →
   solve → result. See **The versus screen** below.
-- **You feature** — complete. Profile, Settings (persisted via
+- **You feature** — complete, with a **mock-backed achievement grid**
+  (`Badge` / `getBadges`, earned + locked-with-progress) on the profile, an
+  avatar that renders a photo when one exists and the initial otherwise, and a
+  **full searchable country picker** (all ISO countries via `kCountryNames`,
+  not a hardcoded ten). Profile, Settings (persisted via
   shared_preferences; theme is bound to `SettingsCubit` above `MaterialApp`)
   and Friends. `feature_placeholder.dart` is gone — all four tabs are real.
 - **Auth feature** — complete. Welcome → sign up → log in → profile setup,
@@ -105,12 +112,43 @@ fails with a pointer to the authority.
   `TimeText` and the domain's `FormatResult` because neither layer may import
   the other. Under 10 min → hundredths; 10 min and over, and all Multi-Blind
   → seconds; an hour and over → `1:04:22`.
-- **Scramblers: twelve of seventeen.** The six NxN cubes, plus the six
-  modifier events which reuse their base puzzle's scrambler. Megaminx,
-  Pyraminx, Skewb, Square-1 and Clock render an explicit **"scrambles coming"**
-  state — each needs its own notation and a random-state solver (roadmap).
-  `GenerateScramble.scrambleFor` returns `Scramble.empty` for those; it never
-  substitutes a 3×3 scramble under another event's label.
+- **Scramblers: all seventeen.** The six NxN cubes, plus the six modifier
+  events which reuse their base puzzle's scrambler, plus **Megaminx and Clock**
+  (a fixed pattern of independent turns — `GenerateScramble._megaminx` /
+  `_clock`), plus **Pyraminx and Skewb** (genuine **random-state** scramblers,
+  `PyraminxScrambler` / `SkewbScrambler`), plus **Square-1** (`SquareOneScrambler`,
+  a legal **random-*move*** scrambler — see below). All are dispatched by
+  `PuzzleFamily` in `scrambleFor`; `hasScrambler` is now true for every event
+  (kept as a gate rather than hard-coded `true`, so the app still degrades
+  gracefully if a future event ships without one). The `_NoScrambler` "scrambles
+  coming" card is therefore unreachable for real events but retained as that
+  graceful-degradation path. The scramblable events marked `isRaceable`
+  (Megaminx, Clock, Pyraminx, Skewb, Square-1) enter private-room racing
+  automatically.
+- **Square-1 is the one *random-move* scrambler, on purpose.** Its state space
+  is billions and shape-shifting, so a WCA-legal random-*state* scramble needs a
+  two-phase solver (shape reduction, then permutation) that can't be certified
+  by a closure count the way the others are. Rather than ship an unverified
+  solver, `SquareOneScrambler` walks a long sequence of **mechanically legal**
+  moves — shape-tracked so a slice never cuts a corner — in real `(top,bottom)/`
+  slash-pairs notation (`square_one_scrambler_test.dart` replays 200 scrambles
+  and asserts every slice is legal). Well-mixed and legal, but not proven
+  uniform; the uniform random-state two-phase solver is the remaining roadmap
+  refinement.
+- **The random-state scramblers' correctness is *proved*, not hoped.** Each
+  puzzle group has a known order — Pyraminx **933,120** (ignoring tips), Skewb
+  **3,149,280** — and a closure over the modelled moves must reach exactly that
+  many and no more (`reachableStateCount`, asserted in the tests). Matching the
+  group order certifies the move model is faithful and the scrambles legal; it
+  is also what caught a real bug — a Skewb move whose twists summed to 2 mod 3
+  had the right group order but the wrong *order-3* move, so `inverse(120°) ≠
+  240°` and scramble inversion silently broke. Further tests check that a
+  scramble solved and re-solved reproduces its own length (inversion is
+  consistent) and that no two adjacent moves share a corner (irreducible).
+  Pyraminx solves from a cached BFS distance table; Skewb solves with
+  bidirectional meet-in-the-middle (no persistent table, microseconds per
+  scramble). **This is the template Square-1 must follow: verify the group
+  order first, then build on it.**
 - **Icons compose**: base `PuzzleFamily` shape + `PuzzleModifier` badge, not
   seventeen bespoke files. Seventeen events are eleven puzzles and five
   disciplines, and `3BLD` should read as a 3×3 because it is one. The
@@ -147,9 +185,11 @@ fails with a pointer to the authority.
 - **Typography:** Noto Serif is a **bundled variable font** (`assets/fonts`, declared in pubspec). google_fonts was removed — it fetches at runtime, which means FOUT, a hard failure offline, and it refuses to render under `flutter test` (breaking goldens). Live-updating numbers must use `.tabular`.
 - **Components:** the shared library lives in `core/widgets`, imported via the `widgets.dart` barrel. Compose screens from it — don't re-roll buttons/chips/cards per feature.
 - **Every async screen ships loading + empty + error** (`LoadingState` / `EmptyState` / `ErrorState`). Not just the happy path.
-- **Offline:** the Solves repository is local-first (Drift); reconcile via `POST /sync` (last-write-wins by `updated_at` + `client_id`). Not built yet — the vault marks full offline sync as fast-follow, not MVP, so `SolveRepositoryImpl` keeps an in-memory session mirror behind the streaming `watchSession()` seam Drift will slot into.
+- **Offline:** the no-backend build persists solves and the selected event to **SharedPreferences** — `LocalSolveStore` (`timer/data/local`) behind `LocalSolveRepository`, no local database. `injection.dart` picks it when `kUseLocalStore` (default true); goldens/screenshots pass `--dart-define=USE_LOCAL_STORE=false` for the deterministic seeded `FakeSolveRepository`. Full server offline sync (`POST /sync`, last-write-wins by `updated_at` + `client_id`) is fast-follow, not MVP; `SolveRepositoryImpl` keeps an in-memory session mirror behind the streaming `watchSession()` seam the offline cache/outbox will slot into when the backend lands.
 - **Errors:** repositories return `Result<T>` (`Ok`/`Err` in `core/error/result.dart`), never throw. Presentation switches over it exhaustively. Cursor pages use `Page<T>` (`{items, next_cursor}`).
 - **Fake vs real data:** every feature defines its repository interface against the documented API, then ships `FakeXRepository` (seeded, realistic) **and** `XRepositoryImpl` (Dio). `kUseFakeData` (`--dart-define=USE_FAKE_DATA=false`) switches them. Fakes never invent server-owned fields (`is_pb`, `elo`, rank).
+- **Demo data seeder:** `core/demo/demo_seed.dart` is the single, pure, deterministic source both `FakeSolveRepository` and `FakeStatsRepository` read from — so the Timer history and the Stats aggregate **reconcile** (the headline best is literally the fastest solve in the list). It covers the **fifteen timed events** (all NxN, OH, Clock, the other-puzzle events, and the three BLDs); Fewest Moves and Multi-Blind are excluded because they rank on moves / cubes, not a clock, and would mislabel a millisecond chart — their history is a follow-up. Seeded per event id, not off a shared RNG stream, so call order can't perturb it. The fake leaderboard is a ~60-deep board (ten named elite + generated filler) with the user embedded at rank 47, event-scaled off one set of 3×3 numbers, real cursor pagination. The `FakeRaceGateway` draws from an **opponent roster** and scripts a mid-solve **disconnect/reconnect** (freezes the opponent's bar, restores it) — injectable via `opponentDropChance`.
+- **Demo failure knob:** the read-heavy fakes (`FakeSolve/Stats/Profile`) take `readFailureRate` and jitter their latency (0.6–1.6×). Rate is **0 by default** — the clean demo never errors; `--dart-define=DEMO_READ_FAILURE_RATE=0.15` (wired as `kDemoReadFailureRate` in `injection.dart`) makes the loading/error/retry states reachable without a backend.
 - **Charts** are hand-painted `CustomPainter`s in the owning feature — no chart
   package. They draw in on load and fall back to an instant render when
   `MediaQuery.disableAnimations` is set. The progress chart's **y-axis is
@@ -237,28 +277,36 @@ swaps is what makes it read as one continuous race.
 - Countries are named in words (`countryCodeToName`, `core/util/country_names.dart`
   — generated from ICU via `tool/gen_country_names.swift`, not hand-typed).
 
-**Deliberately not built from the frames**, because the data is server-owned
-and no endpoint carries it: the lobby's `Elo 1180 · #1,204` pill, the Quick
-Match `best / ao5 / win rate` row, and `RECENT RIVALS`. Tournament cards use
-the frame's layout but every one carries its `SOON` badge — the frame's first
-card advertises a `LIVE` tournament with 1,240 entrants, which would be a plain
-lie against a backend with no tournament endpoint.
+**Now built, as clearly-labelled demo data** (these were once deferred because
+the data is server-owned): the lobby's `Elo · #rank` pill, the Quick Match
+`best / ao5 / win rate` row and `RECENT RIVALS` all come from a
+`RaceLobbyRepository` (`GET /race/summary`, proposed) — one server-owned payload
+rather than three fields stitched from Profile/Stats on the client. And
+**Tournaments is a real feature**: `TournamentRepository` (`GET /tournaments`,
+`/tournaments/:id`, `/tournaments/:id/register`), a `TournamentsCubit` +
+`TournamentDetailCubit`, a list with LIVE/UPCOMING/FINISHED status and a
+register flow, and a full bracket screen (`/race/tournament/:id`). It is fed by
+`FakeTournamentRepository` and **flagged as demo data in the UI** (a banner on
+the tab and the detail screen), because no backend runs real tournaments yet —
+so nothing claims a live competition is happening. The lobby also shows a
+**connection banner** while the race socket is connecting or dropped.
 
 ## Pending work — prompts
 
 **`PROMPT_RACE_FIGMA.md` is done** — see **The versus screen** above.
 
-**`PROMPT_WCA_EVENTS.md` is done** — see **Event model** above. What it
-deliberately scoped out is the next piece of work: per-puzzle **random-state**
-scramblers for Megaminx, Pyraminx, Skewb, Square-1 and Clock, each of which
-needs its own notation and, for competition legality, a solver.
+**`PROMPT_WCA_EVENTS.md` is done** — see **Event model** above. Its scoped-out
+scramblers are **all built now**: Megaminx and Clock (pattern), Pyraminx and
+Skewb (verified random-state), and Square-1 (random-move). The one remaining
+refinement is upgrading Square-1 from random-move to a uniform **random-state**
+two-phase solver.
 
 ## Roadmap (post-MVP)
 
 CV camera timer (flagship v1.1, doubles as PvP anti-cheat), full offline sync,
-ranked matchmaking (Elo/Glicko), tournaments, random-state WCA-legal
-scramblers for the five remaining puzzles, daily challenge, native v2,
-smart-cube (BLE).
+ranked matchmaking (Elo/Glicko), tournaments, upgrading the Square-1 scrambler
+from random-move to a uniform random-state two-phase solver, daily challenge,
+native v2, smart-cube (BLE).
 
 ## Don'ts
 

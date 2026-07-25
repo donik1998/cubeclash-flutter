@@ -10,7 +10,7 @@ The primary client for **CubeClash**, a competitive speedcubing app: solo WCA ti
 - **Routing:** go_router (StatefulShellRoute, 4-tab shell + auth guard)
 - **Networking:** Dio (JWT attach + single-flight refresh-on-401)
 - **Session:** flutter_secure_storage · **Preferences:** shared_preferences
-- **Local store:** Drift / SQLite (offline-first) — fast-follow, not MVP
+- **Local store:** SharedPreferences (offline-first solves + session) — implemented
 - **Real-time:** socket_io_client (live races)
 - **Typography:** Noto Serif, bundled as a variable font
 - **Analytics:** PostHog · **Errors:** Crashlytics
@@ -82,18 +82,18 @@ See `CLAUDE.md` for architecture, conventions, and the backend contract.
 | E | You — Profile, Settings, Friends, persisted prefs | ✅ |
 | F | Auth — 4 screens, secure tokens, refresh, route guard | ✅ |
 | G | Motion (nav Variant C), reduce-motion, a11y, goldens | ✅ |
-| H | All 17 WCA events — event/result model, per-event formats, big-cube scrambler | ✅ |
+| H | All 17 WCA events — event/result model, per-event formats, real scramblers for every event | ✅ |
 
 **Events.** All seventeen are selectable, timed and tracked, with the
-competition format from WCA Regulations §9b driving the session statistics.
-Twelve have working random-move scramblers (the six NxN cubes, plus the six
-modifier events that reuse their base puzzle's). Megaminx, Pyraminx, Skewb,
-Square-1 and Clock ship with an explicit **"scrambles coming"** state rather
-than a substituted 3×3 scramble — each needs its own notation and, for
-competition legality, a random-state solver.
+competition format from WCA Regulations §9b driving the session statistics, and
+**every one produces a real, legal scramble** — the six NxN cubes and their six
+modifier events (random-move), Megaminx and Clock (pattern), Pyraminx and Skewb
+(verified random-state) and Square-1 (random-move). Solves and the selected
+event persist across a relaunch (SharedPreferences), with no backend running.
 
-**Next:** per-puzzle random-state scramblers, offline sync (Drift +
-`POST /sync`), then the CV camera timer.
+**Next:** the backend (`cubeclash-backend`) — the client is done and waiting on
+the REST/socket API. Then the uniform random-state Square-1 solver and the CV
+camera timer.
 Everything behind `kUseFakeData` becomes live the moment the backend answers —
 the real repository implementations are already written against the documented
 contract.
