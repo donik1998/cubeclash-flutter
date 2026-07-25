@@ -3,6 +3,9 @@ import 'dart:math';
 import '../entities/puzzle_spec.dart';
 import '../entities/scramble.dart';
 import '../entities/wca_event.dart';
+import 'pyraminx_scrambler.dart';
+import 'skewb_scrambler.dart';
+import 'square_one_scrambler.dart';
 
 /// Generates a random-move scramble.
 ///
@@ -36,6 +39,12 @@ class GenerateScramble {
 
   static final Random _sharedRandom = Random();
 
+  /// Built lazily — each needed only if its puzzle is asked for.
+  late final PyraminxScrambler _pyraminx = PyraminxScrambler(random: _random);
+  late final SkewbScrambler _skewb = SkewbScrambler(random: _random);
+  late final SquareOneScrambler _squareOne =
+      SquareOneScrambler(random: _random);
+
   /// A scramble for [event], e.g. `"R U2 F' L D R2 …"`.
   ///
   /// Throws [ArgumentError] for an event the scrambler doesn't know — better a
@@ -50,15 +59,37 @@ class GenerateScramble {
 
   /// A **structured** scramble for [event] — the entry point the app uses.
   ///
-  /// Returns [Scramble.empty] rather than throwing for an event with no
-  /// scrambler (Megaminx, Pyraminx, Skewb, Square-1, Clock). That is not the
-  /// silent fallback [call] guards against — an empty scramble renders as the
-  /// explicit "scrambles coming" state, so the user is told there is nothing
-  /// rather than handed a 3×3 scramble under a Megaminx label.
+  /// **All 17 events now return a real scramble** — the six NxN cubes, the six
+  /// modifier events (which reuse their base puzzle), Megaminx and Clock
+  /// (pattern), Pyraminx and Skewb (random-state) and Square-1 (random-move).
+  /// The [Scramble.empty] path below is therefore unreachable for the current
+  /// catalogue; it is kept as graceful degradation so a *future* event shipped
+  /// without a scrambler renders the explicit "scrambles coming" card rather
+  /// than being handed a 3×3 scramble under its own label — the silent fallback
+  /// [call] guards against.
   ///
   /// Multi-Blind returns [WcaEvent.scrambleCount] independent 3×3 scrambles,
   /// one per line, because a Multi-Blind attempt is N scrambles and not one.
   Scramble scrambleFor(WcaEvent event) {
+    // Two events scramble on a fixed pattern rather than a puzzle's move set —
+    // Megaminx (an alternating R/D drill) and Clock (independent dial states).
+    // Both are WCA-legal without a random-*state* solver, unlike the three
+    // still-missing puzzles, so they are generated directly here.
+    switch (event.family) {
+      case PuzzleFamily.dodecahedron:
+        return _megaminx();
+      case PuzzleFamily.clock:
+        return _clock();
+      case PuzzleFamily.tetrahedron:
+        return _pyraminx.generate();
+      case PuzzleFamily.skewb:
+        return _skewb.generate();
+      case PuzzleFamily.square1:
+        return _squareOne.generate();
+      default:
+        break;
+    }
+
     final PuzzleSpec? spec = event.puzzle;
     if (spec == null) return const Scramble.empty();
 
@@ -69,6 +100,70 @@ class GenerateScramble {
       notation: event.notation,
     );
   }
+
+  /// The official WCA Megaminx scramble: seven lines, each ten alternating
+  /// `R`/`D` moves (every turn a `++` or `--` big turn) closed by a single
+  /// `U` or `U'`. Only the turn directions and the final `U` are random — the
+  /// R/D skeleton is fixed, which is exactly why no solver is needed.
+  Scramble _megaminx() {
+    const int lineCount = 7;
+    const int pairsPerLine = 5; // 5 × (R, D) = the ten-move body
+
+    String bigTurn(String face) => '$face${_random.nextBool() ? '++' : '--'}';
+
+    return Scramble(
+      lines: <List<String>>[
+        for (int line = 0; line < lineCount; line++)
+          <String>[
+            for (int pair = 0; pair < pairsPerLine; pair++) ...<String>[
+              bigTurn('R'),
+              bigTurn('D'),
+            ],
+            _random.nextBool() ? 'U' : "U'",
+          ],
+      ],
+      notation: ScrambleNotation.faceTurns,
+    );
+  }
+
+  /// The official WCA Clock scramble: nine front dials, a `y2` flip, five back
+  /// dials, then the pins left up. Each dial is an independent 0–6 turn in
+  /// either direction — no move interacts with another, so a Clock scramble is
+  /// just fourteen random dials and a pin state, again needing no solver.
+  Scramble _clock() {
+    String dial(String pin) {
+      final int amount = _random.nextInt(7); // 0–6, WCA range
+      return '$pin$amount${_random.nextBool() ? '+' : '-'}';
+    }
+
+    return Scramble(
+      lines: <List<String>>[
+        <String>[
+          for (final String pin in _clockFront) dial(pin),
+          'y2',
+          for (final String pin in _clockBack) dial(pin),
+          // The pins left sticking up after the flip — any subset of the four.
+          for (final String pin in _clockPins)
+            if (_random.nextBool()) pin,
+        ],
+      ],
+      notation: ScrambleNotation.faceTurns,
+    );
+  }
+
+  static const List<String> _clockFront = <String>[
+    'UR',
+    'DR',
+    'DL',
+    'UL',
+    'U',
+    'R',
+    'D',
+    'L',
+    'ALL',
+  ];
+  static const List<String> _clockBack = <String>['U', 'R', 'D', 'L', 'ALL'];
+  static const List<String> _clockPins = <String>['UR', 'DR', 'DL', 'UL'];
 
   /// A scramble for an explicit [spec].
   String forPuzzle(PuzzleSpec spec) => _movesFor(spec).join(' ');

@@ -169,18 +169,14 @@ void main() {
       );
     });
 
-    test('an event with no scrambler returns empty, never a substitute', () {
-      for (final WcaEvent event in <WcaEvent>[
-        WcaEvent.megaminx,
-        WcaEvent.pyraminx,
-        WcaEvent.skewb,
-        WcaEvent.square1,
-        WcaEvent.clock,
-      ]) {
+    test('every event now produces a non-empty scramble of its own', () {
+      // All five formerly-unsupported puzzles have real scramblers now, so no
+      // event falls back to an empty "scrambles coming" state.
+      for (final WcaEvent event in WcaEvent.all) {
         final Scramble scramble = generate.scrambleFor(event);
-        expect(scramble.isEmpty, isTrue, reason: event.id);
-        // Emphatically not a 3×3 scramble wearing a Megaminx label.
-        expect(scramble.moveCount, 0, reason: event.id);
+        expect(scramble.isEmpty, isFalse, reason: event.id);
+        expect(scramble.notation, isNot(ScrambleNotation.none),
+            reason: event.id);
       }
     });
   });

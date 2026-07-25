@@ -99,28 +99,28 @@ void main() {
     });
 
     testWidgets(
-      'says so plainly for an event with no scrambler, and disables New',
+      'renders Square-1 slash-pairs, and enables New now that it scrambles',
       (WidgetTester tester) async {
+        final Scramble scramble = Scramble.parse(
+          '(1,0)/(6,3)/(-3,0)/(0,-3)',
+          ScrambleNotation.slashPairs,
+        );
         await tester.pumpWidget(
-          harnessPage(card(const Scramble.empty(), WcaEvent.megaminx)),
+          harnessPage(card(scramble, WcaEvent.square1)),
         );
         await tester.pump();
 
-        expect(
-          find.text('Megaminx scrambles are coming.'),
-          findsOneWidget,
-        );
-        // Emphatically not a 3×3 scramble under a Megaminx label.
-        expect(find.textContaining("R U R'"), findsNothing);
+        // A real scramble, not the old "coming" state.
+        expect(find.textContaining('scrambles are coming'), findsNothing);
+        expect(find.textContaining('(1,0)/'), findsOneWidget);
 
-        // The `New` pill renders in its disabled treatment — there is nothing
-        // for it to generate.
+        // The `New` pill is live — there is something to generate.
         final Opacity pill = tester.widget<Opacity>(
           find
               .ancestor(of: find.text('New'), matching: find.byType(Opacity))
               .first,
         );
-        expect(pill.opacity, lessThan(1));
+        expect(pill.opacity, 1);
       },
     );
   });
@@ -200,22 +200,17 @@ void main() {
       expect(find.textContaining('No event matches'), findsOneWidget);
     });
 
-    testWidgets('lists an un-scramblable event enabled, with the caveat', (
+    testWidgets('lists Square-1 fully supported — no caveat', (
       WidgetTester tester,
     ) async {
       await open(tester);
-      await tester.enterText(find.byType(TextField), 'skewb');
+      await tester.enterText(find.byType(TextField), 'square');
       await tester.pump();
 
-      // Present and selectable — you can still time it. The subtitle carries
-      // the one thing worth knowing before you commit.
-      // Twice: the row title, and the short-name badge — which for Skewb is
-      // the same string.
-      expect(find.text('Skewb'), findsNWidgets(2));
-      expect(
-        find.text('Average of 5 · no scrambles yet'),
-        findsOneWidget,
-      );
+      // Now that Square-1 scrambles, it reads like any other event — the old
+      // "no scrambles yet" note is gone.
+      expect(find.text('Square-1'), findsOneWidget);
+      expect(find.textContaining('no scrambles yet'), findsNothing);
     });
   });
 }

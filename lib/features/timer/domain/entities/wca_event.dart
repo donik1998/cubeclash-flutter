@@ -146,14 +146,29 @@ class WcaEvent {
 
   /// Whether the app can generate a legal scramble for this event today.
   ///
-  /// False for Megaminx, Pyraminx, Skewb, Square-1 and Clock. Those need
-  /// per-puzzle notation and, for competition legality, a random-*state*
-  /// solver — a separate piece of work (roadmap: "full random-state WCA-legal
-  /// scrambles via two-phase solver"). The events ship anyway, with an honest
-  /// "scrambles coming" state, because timing and tracking them is useful on
-  /// its own and because faking a Megaminx scramble out of 3×3 moves would be
-  /// worse than admitting the gap.
-  bool get hasScrambler => puzzle != null;
+  /// True for **every** event now: the twelve puzzle-backed events (a [puzzle]
+  /// set), plus **Megaminx and Clock** (a fixed pattern of independent turns,
+  /// WCA-legal with no solver), plus **Pyraminx and Skewb** (genuine
+  /// random-*state* scramblers, solved directly), plus **Square-1** (a legal
+  /// random-*move* scrambler — the one exception; its uniform random-state
+  /// two-phase solver is the remaining roadmap refinement). See
+  /// [_bespokeScramblerFamilies] and `GenerateScramble.scrambleFor`.
+  ///
+  /// Kept as a gate rather than hard-coded `true`, because `WcaEvent.fromId` is
+  /// lenient and the app should still degrade gracefully if a future event ever
+  /// ships without a scrambler.
+  bool get hasScrambler =>
+      puzzle != null || _bespokeScramblerFamilies.contains(family);
+
+  /// Families with a bespoke scrambler that needs no [PuzzleSpec]: Megaminx and
+  /// Clock (pattern), Pyraminx and Skewb (random-state), Square-1 (random-move).
+  static const Set<PuzzleFamily> _bespokeScramblerFamilies = <PuzzleFamily>{
+    PuzzleFamily.dodecahedron,
+    PuzzleFamily.clock,
+    PuzzleFamily.tetrahedron,
+    PuzzleFamily.skewb,
+    PuzzleFamily.square1,
+  };
 
   /// Whether the result is entered by hand rather than measured by the timer.
   ///

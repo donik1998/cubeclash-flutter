@@ -133,26 +133,14 @@ void main() {
   });
 
   group('scramblers', () {
-    test('twelve of the seventeen have one', () {
-      // Six NxN cubes plus six modifier events, which reuse their base
-      // puzzle's NxN scrambler — which is why the count is not six.
-      expect(WcaEvent.scramblable, hasLength(12));
-    });
-
-    test('the five without one are named, not guessed at', () {
-      final List<String> missing = WcaEvent.all
-          .where((WcaEvent e) => !e.hasScrambler)
-          .map((WcaEvent e) => e.id)
-          .toList();
+    test('all seventeen have one', () {
+      // Twelve puzzle-backed events, plus Megaminx and Clock (fixed-pattern),
+      // plus Pyraminx and Skewb (random-state), plus Square-1 (random-move) —
+      // every event can now be scrambled.
+      expect(WcaEvent.scramblable, hasLength(17));
       expect(
-        missing,
-        unorderedEquals(<String>[
-          'megaminx',
-          'pyraminx',
-          'skewb',
-          'square-1',
-          'clock',
-        ]),
+        WcaEvent.all.every((WcaEvent e) => e.hasScrambler),
+        isTrue,
       );
     });
 

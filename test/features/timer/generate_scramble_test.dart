@@ -1,6 +1,8 @@
 import 'dart:math';
 
 import 'package:cubeclash/features/timer/domain/entities/puzzle_spec.dart';
+import 'package:cubeclash/features/timer/domain/entities/scramble.dart';
+import 'package:cubeclash/features/timer/domain/entities/wca_event.dart';
 import 'package:cubeclash/features/timer/domain/usecases/generate_scramble.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -228,9 +230,104 @@ void main() {
       );
     });
 
-    test('throws loudly for an event with no scrambler', () {
+    test('the low-level String API throws for a puzzle it has no spec for', () {
+      // `call()` only knows the NxN PuzzleSpecs. Megaminx has a scrambler, but
+      // via the structured `scrambleFor` path, not this one — so this still
+      // throws rather than silently substituting.
       final GenerateScramble generate = GenerateScramble(random: Random(8));
       expect(() => generate('megaminx'), throwsArgumentError);
+    });
+  });
+
+  group('Megaminx pattern scrambler', () {
+    test('is seven lines of eleven moves', () {
+      final Scramble s =
+          GenerateScramble(random: Random(1)).scrambleFor(WcaEvent.megaminx);
+      expect(s.notation, ScrambleNotation.faceTurns);
+      expect(s.lines, hasLength(7));
+      for (final List<String> line in s.lines) {
+        expect(line, hasLength(11));
+      }
+    });
+
+    test('every line is ten alternating R/D big turns then a single U', () {
+      final Scramble s =
+          GenerateScramble(random: Random(2)).scrambleFor(WcaEvent.megaminx);
+      for (final List<String> line in s.lines) {
+        for (int i = 0; i < 10; i++) {
+          final String expectedFace = i.isEven ? 'R' : 'D';
+          expect(line[i], anyOf('$expectedFace++', '$expectedFace--'));
+        }
+        expect(line.last, anyOf('U', "U'"));
+      }
+    });
+
+    test('round-trips through Scramble.parse unchanged', () {
+      final Scramble s =
+          GenerateScramble(random: Random(3)).scrambleFor(WcaEvent.megaminx);
+      final Scramble reparsed =
+          Scramble.parse(s.text, ScrambleNotation.faceTurns);
+      expect(reparsed.lines, s.lines);
+    });
+
+    test('successive scrambles differ', () {
+      final GenerateScramble generate = GenerateScramble(random: Random(4));
+      final Set<String> seen = <String>{
+        for (int i = 0; i < 30; i++)
+          generate.scrambleFor(WcaEvent.megaminx).text,
+      };
+      expect(seen.length, 30);
+    });
+  });
+
+  group('Clock pattern scrambler', () {
+    final RegExp dial = RegExp(r'^(UR|DR|DL|UL|U|R|D|L|ALL)[0-6][+-]$');
+
+    test('is one line with a single y2 flip', () {
+      final Scramble s =
+          GenerateScramble(random: Random(1)).scrambleFor(WcaEvent.clock);
+      expect(s.notation, ScrambleNotation.faceTurns);
+      expect(s.lines, hasLength(1));
+      expect(s.tokens.where((String t) => t == 'y2'), hasLength(1));
+    });
+
+    test('has fourteen dial turns and up to four trailing pins', () {
+      final Scramble s =
+          GenerateScramble(random: Random(2)).scrambleFor(WcaEvent.clock);
+      final List<String> tokens = s.tokens;
+      final int y2 = tokens.indexOf('y2');
+
+      // Nine dials, y2, five dials — every one a legal dial token.
+      for (final String t in tokens.sublist(0, y2)) {
+        expect(dial.hasMatch(t), isTrue, reason: t);
+      }
+      expect(y2, 9);
+      for (final String t in tokens.sublist(y2 + 1, y2 + 6)) {
+        expect(dial.hasMatch(t), isTrue, reason: t);
+      }
+
+      // Whatever follows is a subset of the four pins.
+      final List<String> pins = tokens.sublist(y2 + 6);
+      expect(pins.length, lessThanOrEqualTo(4));
+      for (final String p in pins) {
+        expect(<String>['UR', 'DR', 'DL', 'UL'], contains(p));
+      }
+    });
+
+    test('round-trips through Scramble.parse unchanged', () {
+      final Scramble s =
+          GenerateScramble(random: Random(5)).scrambleFor(WcaEvent.clock);
+      final Scramble reparsed =
+          Scramble.parse(s.text, ScrambleNotation.faceTurns);
+      expect(reparsed.lines, s.lines);
+    });
+
+    test('successive scrambles differ', () {
+      final GenerateScramble generate = GenerateScramble(random: Random(6));
+      final Set<String> seen = <String>{
+        for (int i = 0; i < 30; i++) generate.scrambleFor(WcaEvent.clock).text,
+      };
+      expect(seen.length, 30);
     });
   });
 
