@@ -18,11 +18,14 @@ import '../models/solve_dto.dart';
 /// the spec, so this compiles and is reviewable today and becomes live the
 /// moment the server exists. Swap it in with `--dart-define=USE_FAKE_DATA=false`.
 ///
-/// **Session handling is in-memory for now.** CLAUDE.md calls for a local-first
-/// Drift store, but full offline sync is explicitly fast-follow rather than MVP
-/// (docs → Concept & Scope: "MVP keeps local persistence + online PvP"). The
-/// session mirror below is the seam that store will slot into: [watchSession]
-/// already streams, so nothing above this layer changes when it lands.
+/// **Session handling is in-memory for now.** The no-backend build persists
+/// solves locally via `LocalSolveStore` (SharedPreferences,
+/// lib/features/timer/data/local) — there is no local database. Full offline
+/// sync against the server is explicitly fast-follow
+/// rather than MVP (docs → Concept & Scope: "MVP keeps local persistence +
+/// online PvP"). The session mirror below is the seam that offline cache/outbox
+/// will slot into: [watchSession] already streams, so nothing above this layer
+/// changes when it lands.
 class SolveRepositoryImpl implements SolveRepository {
   SolveRepositoryImpl(this._client);
 
