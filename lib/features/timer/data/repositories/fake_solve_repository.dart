@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:math';
 
+import '../../../../core/demo/demo_seed.dart';
 import '../../../../core/error/failures.dart';
 import '../../../../core/error/result.dart';
 import '../../../../core/network/page.dart';
 import '../../domain/entities/penalty.dart';
 import '../../domain/entities/solve.dart';
+import '../../domain/entities/wca_event.dart';
 import '../../domain/repositories/solve_repository.dart';
 import '../../domain/usecases/generate_scramble.dart';
 
@@ -25,14 +27,20 @@ import '../../domain/usecases/generate_scramble.dart';
 /// Note what it does **not** fake: `is_pb`. That field is server-owned
 /// (docs → API Design) and is not invented here.
 class FakeSolveRepository implements SolveRepository {
-  FakeSolveRepository({Random? random, DateTime? now})
+  FakeSolveRepository(
+      {Random? random, DateTime? now, double readFailureRate = 0})
       : _random = random ?? Random(7),
-        _now = now ?? DateTime.now() {
+        _now = now ?? DateTime.now(),
+        _readFailureRate = readFailureRate {
     _history = _seedHistory();
   }
 
   final Random _random;
   final DateTime _now;
+
+  /// How often [getHistory] pretends the network failed, so the error state is
+  /// reachable in a demo. Defaults to 0; wire a small value in DI to show it.
+  final double _readFailureRate;
 
   /// Everything ever solved, newest first — what `GET /solves` would return.
   late final List<Solve> _history;
@@ -49,6 +57,8 @@ class FakeSolveRepository implements SolveRepository {
   static const Duration _latency = Duration(milliseconds: 220);
 
   static const int _pageSize = 20;
+
+  Future<void> _wait() => Future<void>.delayed(demoLatency(_latency, _random));
 
   @override
   Stream<List<Solve>> watchSession() async* {
@@ -71,7 +81,7 @@ class FakeSolveRepository implements SolveRepository {
     int? solvedCount,
     int? attemptedCount,
   }) async {
-    await Future<void>.delayed(_latency);
+    await _wait();
     final Solve solve = Solve(
       id: clientId,
       event: event,
@@ -91,7 +101,7 @@ class FakeSolveRepository implements SolveRepository {
 
   @override
   Future<Result<Solve>> updatePenalty(String id, Penalty penalty) async {
-    await Future<void>.delayed(_latency);
+    await _wait();
 
     final int sessionIndex = _session.indexWhere((Solve s) => s.id == id);
     final int historyIndex = _history.indexWhere((Solve s) => s.id == id);
@@ -114,7 +124,7 @@ class FakeSolveRepository implements SolveRepository {
 
   @override
   Future<Result<void>> deleteSolve(String id) async {
-    await Future<void>.delayed(_latency);
+    await _wait();
     final bool existed = _session.any((Solve s) => s.id == id) ||
         _history.any((Solve s) => s.id == id);
     if (!existed) {
@@ -131,7 +141,12 @@ class FakeSolveRepository implements SolveRepository {
     String event = '3x3',
     String? cursor,
   }) async {
-    await Future<void>.delayed(_latency);
+    await _wait();
+    if (_random.nextDouble() < _readFailureRate) {
+      return const Err<Page<Solve>>(
+        NetworkFailure('Something went wrong. Pull to retry.'),
+      );
+    }
 
     final List<Solve> forEvent =
         _history.where((Solve s) => s.event == event).toList();
@@ -159,35 +174,35 @@ class FakeSolveRepository implements SolveRepository {
     return const Ok<void>(null);
   }
 
-  /// ~140 solves over the past three weeks, slowly improving.
+  /// A three-week practice history for every **timed** event, newest first.
+  ///
+  /// The times come from the shared [generateDemoHistory] seeder rather than a
+  /// local sampler, so that `FakeStatsRepository` — which reads the same seeder
+  /// — reports bests and averages that actually match the solves listed here.
+  /// Fewest Moves and Multi-Blind are excluded (they are not ranked on a clock;
+  /// see the seeder's doc), so their history stays empty in the demo.
   List<Solve> _seedHistory() {
     final GenerateScramble generate = GenerateScramble(random: _random);
     final List<Solve> solves = <Solve>[];
 
-    const int days = 21;
-    for (int dayAgo = days; dayAgo >= 0; dayAgo--) {
-      // Some days you don't cube.
-      if (_random.nextDouble() < 0.15) continue;
+    for (final String eventId in demoTimedEvents.keys) {
+      final WcaEvent event = WcaEvent.fromId(eventId);
+      final List<DemoSolveSample> samples =
+          generateDemoHistory(eventId, now: _now);
 
-      final int count = 4 + _random.nextInt(8);
-      // Mean drifts from ~15.5s down to ~12.0s across the window — a believable
-      // three weeks of practice rather than a flat random walk.
-      final double progress = (days - dayAgo) / days;
-      final double meanMs = 15500 - (3500 * progress);
-
-      for (int i = 0; i < count; i++) {
-        final DateTime solvedAt = _now.subtract(
-          Duration(days: dayAgo, hours: _random.nextInt(6), minutes: i * 3),
-        );
-
+      for (int i = 0; i < samples.length; i++) {
+        final DemoSolveSample sample = samples[i];
         solves.add(
           Solve(
-            id: 'seed-$dayAgo-$i',
-            event: '3x3',
-            scramble: generate(),
-            timeMs: _sampleTimeMs(meanMs),
-            solvedAt: solvedAt,
-            penalty: _samplePenalty(),
+            id: 'seed-$eventId-$i',
+            event: eventId,
+            // A fresh scramble per solve — every timed event now has a real
+            // scrambler (Clock and Megaminx included), so none of these seed an
+            // empty string.
+            scramble: generate.scrambleFor(event).text,
+            timeMs: sample.timeMs,
+            solvedAt: sample.solvedAt,
+            penalty: _penaltyFrom(sample.penalty),
           ),
         );
       }
@@ -198,23 +213,11 @@ class FakeSolveRepository implements SolveRepository {
     return solves;
   }
 
-  /// A right-skewed time around [meanMs]: most solves cluster, a few are much
-  /// slower (a bad OLL case), none are impossibly fast.
-  int _sampleTimeMs(double meanMs) {
-    // Sum of two uniforms ≈ triangular, then a long tail on 8% of solves.
-    final double base =
-        meanMs * (0.78 + (_random.nextDouble() + _random.nextDouble()) * 0.22);
-    final double tail =
-        _random.nextDouble() < 0.08 ? _random.nextDouble() * meanMs * 0.6 : 0;
-    return (base + tail).round().clamp(6000, 60000);
-  }
-
-  Penalty _samplePenalty() {
-    final double roll = _random.nextDouble();
-    if (roll < 0.04) return Penalty.plus2;
-    if (roll < 0.055) return Penalty.dnf;
-    return Penalty.none;
-  }
+  Penalty _penaltyFrom(DemoPenalty penalty) => switch (penalty) {
+        DemoPenalty.none => Penalty.none,
+        DemoPenalty.plus2 => Penalty.plus2,
+        DemoPenalty.dnf => Penalty.dnf,
+      };
 
   /// Releases the session stream. Called from DI teardown in tests.
   Future<void> dispose() => _sessionController.close();
