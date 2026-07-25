@@ -1,5 +1,6 @@
 import '../../../../core/error/result.dart';
 import '../entities/app_settings.dart';
+import '../entities/badge.dart';
 import '../entities/user_profile.dart';
 
 /// Account and social data.
@@ -18,6 +19,10 @@ abstract class ProfileRepository {
   Future<Result<UserProfile>> updateMe({String? displayName, String? country});
 
   Future<Result<List<Friend>>> getFriends();
+
+  /// The signed-in user's achievements, earned and locked. Server-owned in
+  /// production (`GET /me/badges`).
+  Future<Result<List<Badge>>> getBadges();
 
   /// Invite by display name or email — the doc doesn't say which, so the impl
   /// sends whatever the user typed under `query`.

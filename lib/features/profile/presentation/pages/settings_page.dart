@@ -168,6 +168,29 @@ class _AccountCard extends StatelessWidget {
           );
         }
 
+        // A load failure used to fall through to a silent "—" / "Not signed
+        // in"; surface it with a way back instead.
+        if (state.failure != null && state.profile == null) {
+          return AppCard(
+            child: Row(
+              children: <Widget>[
+                Icon(Icons.error_outline, color: colors.statusDanger),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    "Couldn't load your account.",
+                    style: AppTypography.body.copyWith(color: colors.textMuted),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => context.read<ProfileCubit>().load(),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          );
+        }
+
         final String name = state.profile?.displayName ?? '—';
         final String email = state.profile?.email ?? 'Not signed in';
 

@@ -79,48 +79,54 @@ class _FriendsViewState extends State<_FriendsView> {
             );
           }
 
-          return ListView(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            children: <Widget>[
-              _InviteCard(
-                controller: _inviteController,
-                isSubmitting: state.isSubmitting,
-                onInvite: cubit.invite,
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              if (state.isEmpty)
-                const EmptyState(
-                  icon: Icons.people_outline,
-                  title: 'No friends yet',
-                  message:
-                      'Invite someone above and their times show up on your '
-                      'friends leaderboard.',
-                )
-              else ...<Widget>[
-                if (state.incomingRequests.isNotEmpty) ...<Widget>[
-                  _Header('REQUESTS · ${state.incomingRequests.length}'),
-                  for (final Friend friend in state.incomingRequests)
-                    _FriendRow(
-                      friend: friend,
-                      onAccept: state.isSubmitting
-                          ? null
-                          : () => cubit.accept(friend.userId),
-                    ),
-                  const SizedBox(height: AppSpacing.xl),
-                ],
-                if (state.accepted.isNotEmpty) ...<Widget>[
-                  const _Header('FRIENDS'),
-                  for (final Friend friend in state.accepted)
-                    _FriendRow(friend: friend),
-                  const SizedBox(height: AppSpacing.xl),
-                ],
-                if (state.outgoingRequests.isNotEmpty) ...<Widget>[
-                  const _Header('INVITED'),
-                  for (final Friend friend in state.outgoingRequests)
-                    _FriendRow(friend: friend),
+          // Pull-to-refresh so a reload that failed on cached data (surfaced as
+          // a snackbar) has a way to be retried without leaving the screen.
+          return RefreshIndicator(
+            onRefresh: cubit.load,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              children: <Widget>[
+                _InviteCard(
+                  controller: _inviteController,
+                  isSubmitting: state.isSubmitting,
+                  onInvite: cubit.invite,
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                if (state.isEmpty)
+                  const EmptyState(
+                    icon: Icons.people_outline,
+                    title: 'No friends yet',
+                    message:
+                        'Invite someone above and their times show up on your '
+                        'friends leaderboard.',
+                  )
+                else ...<Widget>[
+                  if (state.incomingRequests.isNotEmpty) ...<Widget>[
+                    _Header('REQUESTS · ${state.incomingRequests.length}'),
+                    for (final Friend friend in state.incomingRequests)
+                      _FriendRow(
+                        friend: friend,
+                        onAccept: state.isSubmitting
+                            ? null
+                            : () => cubit.accept(friend.userId),
+                      ),
+                    const SizedBox(height: AppSpacing.xl),
+                  ],
+                  if (state.accepted.isNotEmpty) ...<Widget>[
+                    const _Header('FRIENDS'),
+                    for (final Friend friend in state.accepted)
+                      _FriendRow(friend: friend),
+                    const SizedBox(height: AppSpacing.xl),
+                  ],
+                  if (state.outgoingRequests.isNotEmpty) ...<Widget>[
+                    const _Header('INVITED'),
+                    for (final Friend friend in state.outgoingRequests)
+                      _FriendRow(friend: friend),
+                  ],
                 ],
               ],
-            ],
+            ),
           );
         },
       ),

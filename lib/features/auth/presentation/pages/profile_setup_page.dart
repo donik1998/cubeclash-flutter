@@ -6,6 +6,7 @@ import '../../../../core/di/injection.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/util/country_names.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../cubit/auth_cubit.dart';
 
@@ -38,9 +39,8 @@ class _ProfileSetupViewState extends State<_ProfileSetupView> {
   String? _nameError;
   String? _country;
 
-  /// A short list rather than all 249 codes: a picker with a search field is a
-  /// screen of its own, and this is a one-tap step. "Somewhere else" keeps the
-  /// door open without blocking anyone.
+  /// The common picks, shown as one-tap chips. Anywhere else is a search away
+  /// (see [_pickFromAll]), so no one is boxed out by not being on this list.
   static const List<(String, String)> _countries = <(String, String)>[
     ('GB', 'United Kingdom'),
     ('US', 'United States'),
@@ -69,6 +69,17 @@ class _ProfileSetupViewState extends State<_ProfileSetupView> {
           displayName: _displayName.text,
           country: _country,
         );
+  }
+
+  Future<void> _pickFromAll() async {
+    final String? picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.colors.bgSurface,
+      builder: (BuildContext sheetContext) =>
+          _CountrySearchSheet(selected: _country),
+    );
+    if (picked != null && mounted) setState(() => _country = picked);
   }
 
   @override
@@ -143,6 +154,21 @@ class _ProfileSetupViewState extends State<_ProfileSetupView> {
                         () => _country = _country == code ? null : code,
                       ),
                     ),
+                  // A country chosen from the full list that isn't one of the
+                  // common picks still shows here, selected.
+                  if (_country != null &&
+                      !_countries.any(((String, String) c) => c.$1 == _country))
+                    AppChip(
+                      label:
+                          '${countryCodeToFlag(_country!)} ${countryCodeToName(_country!) ?? _country!}',
+                      selected: true,
+                      onTap: () => setState(() => _country = null),
+                    ),
+                  AppChip(
+                    label: '🔎 Search all countries',
+                    selected: false,
+                    onTap: _pickFromAll,
+                  ),
                 ],
               ),
               const SizedBox(height: AppSpacing.x4),
@@ -154,6 +180,108 @@ class _ProfileSetupViewState extends State<_ProfileSetupView> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// A searchable list of every country, opened from the setup screen when the
+/// common chips don't cover you. Filters `kCountryNames` as you type and pops
+/// the chosen ISO code.
+class _CountrySearchSheet extends StatefulWidget {
+  const _CountrySearchSheet({required this.selected});
+
+  final String? selected;
+
+  @override
+  State<_CountrySearchSheet> createState() => _CountrySearchSheetState();
+}
+
+class _CountrySearchSheetState extends State<_CountrySearchSheet> {
+  final TextEditingController _query = TextEditingController();
+
+  /// The full list, once, sorted by name — filtered per keystroke.
+  static final List<MapEntry<String, String>> _all = kCountryNames.entries
+      .toList()
+    ..sort((MapEntry<String, String> a, MapEntry<String, String> b) =>
+        a.value.compareTo(b.value));
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final AppColors colors = context.colors;
+    final String q = _query.text.trim().toLowerCase();
+    final List<MapEntry<String, String>> matches = q.isEmpty
+        ? _all
+        : _all
+            .where((MapEntry<String, String> e) =>
+                e.value.toLowerCase().contains(q) || e.key.toLowerCase() == q)
+            .toList();
+
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: FractionallySizedBox(
+        heightFactor: 0.85,
+        child: Column(
+          children: <Widget>[
+            const SizedBox(height: AppSpacing.md),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: colors.borderSubtle,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: AppTextField(
+                label: 'Country',
+                controller: _query,
+                hintText: 'Search countries',
+                autofocus: true,
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+            Expanded(
+              child: matches.isEmpty
+                  ? const EmptyState(
+                      title: 'No match',
+                      message: 'Try a different spelling.',
+                      icon: Icons.public_off,
+                    )
+                  : ListView.builder(
+                      itemCount: matches.length,
+                      itemBuilder: (BuildContext context, int i) {
+                        final MapEntry<String, String> c = matches[i];
+                        final bool selected = c.key == widget.selected;
+                        return ListTile(
+                          leading: Text(
+                            countryCodeToFlag(c.key) ?? '🏳️',
+                            style: AppTypography.h2,
+                          ),
+                          title: Text(
+                            c.value,
+                            style: AppTypography.body
+                                .copyWith(color: colors.textPrimary),
+                          ),
+                          trailing: selected
+                              ? Icon(Icons.check, color: colors.brandPrimary)
+                              : null,
+                          onTap: () => Navigator.of(context).pop(c.key),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

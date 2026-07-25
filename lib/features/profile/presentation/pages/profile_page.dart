@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Badge;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
@@ -7,6 +7,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/widgets.dart';
+import '../../domain/entities/badge.dart';
 import '../../domain/entities/user_profile.dart';
 import '../cubit/profile_cubit.dart';
 
@@ -54,7 +55,7 @@ class _ProfileView extends StatelessWidget {
             );
           }
 
-          return _Body(profile: profile);
+          return _Body(profile: profile, badges: state.badges);
         },
       ),
     );
@@ -62,9 +63,10 @@ class _ProfileView extends StatelessWidget {
 }
 
 class _Body extends StatelessWidget {
-  const _Body({required this.profile});
+  const _Body({required this.profile, required this.badges});
 
   final UserProfile profile;
+  final List<Badge> badges;
 
   @override
   Widget build(BuildContext context) {
@@ -85,14 +87,25 @@ class _Body extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: colors.brandPrimarySoft,
+                  image: profile.avatarUrl == null
+                      ? null
+                      : DecorationImage(
+                          image: NetworkImage(profile.avatarUrl!),
+                          fit: BoxFit.cover,
+                        ),
                 ),
                 alignment: Alignment.center,
-                child: Text(
-                  profile.displayName.isEmpty
-                      ? '?'
-                      : profile.displayName.characters.first.toUpperCase(),
-                  style: AppTypography.h1.copyWith(color: colors.brandPrimary),
-                ),
+                // The initial stands in until (and if) a photo loads.
+                child: profile.avatarUrl != null
+                    ? null
+                    : Text(
+                        profile.displayName.isEmpty
+                            ? '?'
+                            : profile.displayName.characters.first
+                                .toUpperCase(),
+                        style: AppTypography.h1
+                            .copyWith(color: colors.brandPrimary),
+                      ),
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
@@ -153,7 +166,7 @@ class _Body extends StatelessWidget {
           style: AppTypography.overline.copyWith(color: colors.textMuted),
         ),
         const SizedBox(height: AppSpacing.md),
-        const _BadgesPlaceholder(),
+        _Badges(badges: badges),
         const SizedBox(height: AppSpacing.x3),
         AppButton.secondary(
           label: 'Friends',
@@ -171,41 +184,111 @@ class _Body extends StatelessWidget {
   }
 }
 
-/// Badges are gamification, which is roadmap. The slot is designed so the
-/// profile doesn't look unfinished, and says plainly that it's coming.
-class _BadgesPlaceholder extends StatelessWidget {
-  const _BadgesPlaceholder();
+/// The earned/locked achievement grid. Earned badges read in the brand colour;
+/// locked ones are dimmed and, where it counts, show how close you are.
+class _Badges extends StatelessWidget {
+  const _Badges({required this.badges});
+
+  final List<Badge> badges;
+
+  static IconData _iconFor(BadgeIcon icon) => switch (icon) {
+        BadgeIcon.firstSolve => Icons.timer_outlined,
+        BadgeIcon.speed => Icons.bolt_outlined,
+        BadgeIcon.milestone => Icons.flag_outlined,
+        BadgeIcon.streak => Icons.local_fire_department_outlined,
+        BadgeIcon.race => Icons.sports_score_outlined,
+        BadgeIcon.podium => Icons.emoji_events_outlined,
+        BadgeIcon.allEvents => Icons.grid_view_outlined,
+        BadgeIcon.comeback => Icons.trending_up_outlined,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    if (badges.isEmpty) {
+      return const AppCard(
+        child: EmptyState(
+          title: 'No badges yet',
+          message: 'Solve, race and keep a streak to start earning them.',
+          icon: Icons.workspace_premium_outlined,
+        ),
+      );
+    }
+
+    final int earned = badges.where((Badge b) => b.earned).length;
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            '$earned of ${badges.length} earned',
+            style: AppTypography.caption
+                .copyWith(color: context.colors.textSecondary),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.md,
+            children: <Widget>[
+              for (final Badge badge in badges)
+                _BadgeTile(badge: badge, icon: _iconFor(badge.icon)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BadgeTile extends StatelessWidget {
+  const _BadgeTile({required this.badge, required this.icon});
+
+  final Badge badge;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
     final AppColors colors = context.colors;
+    final Color tint = badge.earned ? colors.brandPrimary : colors.textMuted;
 
-    return AppCard(
-      child: Row(
-        children: <Widget>[
-          for (int i = 0; i < 3; i++) ...<Widget>[
+    return Tooltip(
+      message: badge.earned
+          ? badge.description
+          : '${badge.description}${badge.progressLabel == null ? '' : '\n${badge.progressLabel}'}',
+      child: SizedBox(
+        width: 72,
+        child: Column(
+          children: <Widget>[
             Container(
-              width: 44,
-              height: 44,
+              width: 52,
+              height: 52,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: colors.bgSurfaceAlt,
+                color: badge.earned
+                    ? colors.brandPrimarySoft
+                    : colors.bgSurfaceAlt,
               ),
-              child: Icon(
-                Icons.workspace_premium_outlined,
-                size: 20,
-                color: colors.textMuted,
+              alignment: Alignment.center,
+              child: Icon(icon, size: 24, color: tint),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              badge.name,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.small.copyWith(
+                color: badge.earned ? colors.textPrimary : colors.textMuted,
               ),
             ),
-            const SizedBox(width: AppSpacing.sm),
+            if (!badge.earned && badge.progressLabel != null)
+              Text(
+                badge.progressLabel!,
+                textAlign: TextAlign.center,
+                style: AppTypography.overline.copyWith(color: colors.textMuted),
+              ),
           ],
-          Expanded(
-            child: Text(
-              'Badges arrive with streaks and daily challenges.',
-              style: AppTypography.caption.copyWith(color: colors.textMuted),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

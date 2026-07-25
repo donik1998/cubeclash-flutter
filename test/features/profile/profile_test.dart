@@ -2,6 +2,7 @@ import 'package:cubeclash/core/analytics/analytics_service.dart';
 import 'package:cubeclash/core/error/failures.dart';
 import 'package:cubeclash/core/error/result.dart';
 import 'package:cubeclash/features/profile/domain/entities/app_settings.dart';
+import 'package:cubeclash/features/profile/domain/entities/badge.dart';
 import 'package:cubeclash/features/profile/domain/entities/user_profile.dart';
 import 'package:cubeclash/features/profile/domain/repositories/profile_repository.dart';
 import 'package:cubeclash/features/profile/presentation/cubit/friends_cubit.dart';
@@ -127,6 +128,8 @@ void main() {
       repository = _MockProfileRepository();
       when(() => repository.getMe())
           .thenAnswer((_) async => const Ok<UserProfile>(me));
+      when(() => repository.getBadges())
+          .thenAnswer((_) async => const Ok<List<Badge>>(<Badge>[]));
       when(() => repository.logout())
           .thenAnswer((_) async => const Ok<void>(null));
     });
@@ -196,6 +199,39 @@ void main() {
       await cubit.logout();
 
       expect(cubit.state.signedOut, isTrue);
+    });
+
+    test('loads badges alongside the profile', () async {
+      when(() => repository.getBadges()).thenAnswer(
+        (_) async => const Ok<List<Badge>>(<Badge>[
+          Badge(
+            id: 'first-solve',
+            name: 'First Solve',
+            description: 'x',
+            icon: BadgeIcon.firstSolve,
+            earned: true,
+          ),
+        ]),
+      );
+
+      final ProfileCubit cubit = build();
+      await cubit.load();
+
+      expect(cubit.state.badges, hasLength(1));
+      expect(cubit.state.badges.single.earned, isTrue);
+    });
+
+    test('a badge fetch failure empties the row but keeps the profile',
+        () async {
+      when(() => repository.getBadges()).thenAnswer(
+        (_) async => const Err<List<Badge>>(NetworkFailure('offline')),
+      );
+
+      final ProfileCubit cubit = build();
+      await cubit.load();
+
+      expect(cubit.state.profile, isNotNull);
+      expect(cubit.state.badges, isEmpty);
     });
   });
 

@@ -4,6 +4,7 @@ import '../../../../core/error/result.dart';
 import '../../../../core/network/auth_interceptor.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/network/dio_failures.dart';
+import '../../domain/entities/badge.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/repositories/profile_repository.dart';
 
@@ -62,6 +63,21 @@ class ProfileRepositoryImpl implements ProfileRepository {
       );
 
   @override
+  Future<Result<List<Badge>>> getBadges() => Result.guard<List<Badge>>(
+        () async {
+          final Response<dynamic> response =
+              await _client.dio.get<dynamic>('/me/badges');
+          final Map<String, dynamic> body = asJsonMap(response.data);
+          final List<dynamic> items =
+              (body['items'] as List<dynamic>?) ?? <dynamic>[];
+          return <Badge>[
+            for (final dynamic b in items) _badgeFromJson(asJsonMap(b)),
+          ];
+        },
+        onError: dioFailure,
+      );
+
+  @override
   Future<Result<void>> inviteFriend(String query) => Result.guard<void>(
         () => _client.dio.post<dynamic>(
           '/friends/invite',
@@ -110,6 +126,20 @@ class ProfileRepositoryImpl implements ProfileRepository {
         avatarUrl: json['avatar_url'] as String?,
         bestSingleMs: _int(json['best_single_ms']),
         incoming: json['incoming'] as bool? ?? false,
+      );
+
+  static Badge _badgeFromJson(Map<String, dynamic> json) => Badge(
+        id: json['id'] as String? ?? '',
+        name: json['name'] as String? ?? '',
+        description: json['description'] as String? ?? '',
+        icon: _badgeIcon(json['icon'] as String?),
+        earned: json['earned'] as bool? ?? false,
+        progressLabel: json['progress_label'] as String?,
+      );
+
+  static BadgeIcon _badgeIcon(String? wire) => BadgeIcon.values.firstWhere(
+        (BadgeIcon i) => i.name == wire,
+        orElse: () => BadgeIcon.milestone,
       );
 
   static int? _int(dynamic v) => v is num ? v.toInt() : null;

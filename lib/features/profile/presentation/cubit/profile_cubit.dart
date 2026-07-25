@@ -3,12 +3,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/error/failures.dart';
 import '../../../../core/error/result.dart';
+import '../../domain/entities/badge.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/repositories/profile_repository.dart';
 
 class ProfileState extends Equatable {
   const ProfileState({
     this.profile,
+    this.badges = const <Badge>[],
     this.isLoading = true,
     this.isSaving = false,
     this.signedOut = false,
@@ -16,6 +18,10 @@ class ProfileState extends Equatable {
   });
 
   final UserProfile? profile;
+
+  /// Loaded alongside the profile. A badge fetch that fails is not fatal — the
+  /// profile still renders — so it degrades to an empty list, not an error.
+  final List<Badge> badges;
   final bool isLoading;
   final bool isSaving;
 
@@ -26,6 +32,7 @@ class ProfileState extends Equatable {
 
   ProfileState copyWith({
     UserProfile? profile,
+    List<Badge>? badges,
     bool? isLoading,
     bool? isSaving,
     bool? signedOut,
@@ -34,6 +41,7 @@ class ProfileState extends Equatable {
   }) =>
       ProfileState(
         profile: profile ?? this.profile,
+        badges: badges ?? this.badges,
         isLoading: isLoading ?? this.isLoading,
         isSaving: isSaving ?? this.isSaving,
         signedOut: signedOut ?? this.signedOut,
@@ -42,7 +50,7 @@ class ProfileState extends Equatable {
 
   @override
   List<Object?> get props =>
-      <Object?>[profile, isLoading, isSaving, signedOut, failure];
+      <Object?>[profile, badges, isLoading, isSaving, signedOut, failure];
 }
 
 class ProfileCubit extends Cubit<ProfileState> {
@@ -55,12 +63,22 @@ class ProfileCubit extends Cubit<ProfileState> {
   Future<void> load() async {
     emit(state.copyWith(isLoading: true, clearFailure: true));
 
-    final Result<UserProfile> result = await _repository.getMe();
+    // Profile and badges load together; the profile decides the screen's
+    // fate, so badges are read but their failure only empties the badge row.
+    final (Result<UserProfile>, Result<List<Badge>>) results = await (
+      _repository.getMe(),
+      _repository.getBadges(),
+    ).wait;
     if (isClosed) return;
 
-    switch (result) {
+    final List<Badge> badges = switch (results.$2) {
+      Ok<List<Badge>>(:final List<Badge> value) => value,
+      Err<List<Badge>>() => const <Badge>[],
+    };
+
+    switch (results.$1) {
       case Ok<UserProfile>(:final UserProfile value):
-        emit(state.copyWith(profile: value, isLoading: false));
+        emit(state.copyWith(profile: value, badges: badges, isLoading: false));
       case Err<UserProfile>(:final Failure failure):
         emit(state.copyWith(isLoading: false, failure: failure));
     }
