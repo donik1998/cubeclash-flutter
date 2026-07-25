@@ -34,6 +34,31 @@ class SolveDto {
         attemptedCount: (json['attempted_count'] as num?)?.toInt(),
       );
 
+  /// Full round-trip serialization for **local** persistence
+  /// (`LocalSolveStore` on SharedPreferences).
+  ///
+  /// Deliberately **not** [toCreateJson]: that is the `POST /solves` body and
+  /// drops `id`/`is_pb` because the server owns them. Local storage is the
+  /// opposite need — it must reconstruct the *exact* solve on relaunch, so it
+  /// keeps `id` and every field [fromJson] reads back. `is_pb` is still omitted
+  /// (the client never owns it), and the optional long-form fields are omitted
+  /// when null so a 3×3 solve doesn't persist a meaningless `move_count`.
+  ///
+  /// `solved_at` is ISO 8601 **UTC** and `scramble` keeps its significant `\n`,
+  /// so both round-trip through [fromJson] unchanged.
+  static Map<String, dynamic> toJson(Solve solve) => <String, dynamic>{
+        'id': solve.id,
+        'event': solve.event,
+        'scramble': solve.scramble,
+        'time_ms': solve.timeMs,
+        'solved_at': solve.solvedAt.toUtc().toIso8601String(),
+        'penalty': penaltyToWire(solve.penalty),
+        if (solve.moveCount != null) 'move_count': solve.moveCount,
+        if (solve.solvedCount != null) 'solved_count': solve.solvedCount,
+        if (solve.attemptedCount != null)
+          'attempted_count': solve.attemptedCount,
+      };
+
   /// Body for `POST /solves`.
   ///
   /// [clientId] makes the write idempotent — the server upserts on

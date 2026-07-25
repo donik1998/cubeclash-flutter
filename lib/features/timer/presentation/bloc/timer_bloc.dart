@@ -15,6 +15,7 @@ import '../../domain/entities/solve.dart';
 import '../../domain/entities/solve_result.dart';
 import '../../domain/entities/timer_preferences.dart';
 import '../../domain/entities/wca_event.dart';
+import '../../domain/repositories/last_event_store.dart';
 import '../../domain/repositories/solve_repository.dart';
 import '../../domain/usecases/compute_averages.dart';
 import '../../domain/usecases/generate_scramble.dart';
@@ -51,11 +52,13 @@ class TimerBloc extends Bloc<TimerEvent, TimerState> {
     required AnalyticsService analytics,
     Ticker ticker = const RealTicker(),
     String Function()? idFactory,
+    LastEventStore? lastEventStore,
   })  : _repository = repository,
         _generateScramble = generateScramble,
         _analytics = analytics,
         _ticker = ticker,
         _idFactory = idFactory ?? _defaultIdFactory,
+        _lastEventStore = lastEventStore,
         super(const TimerState()) {
     on<TimerStarted>(_onStarted);
     on<TimerPressedDown>(_onPressedDown);
@@ -92,6 +95,10 @@ class TimerBloc extends Bloc<TimerEvent, TimerState> {
   final Ticker _ticker;
   final String Function() _idFactory;
 
+  /// Remembers the last-selected event across relaunches. Null on the seeded /
+  /// test build, which always opens on 3×3.
+  final LastEventStore? _lastEventStore;
+
   static const GradeInspection _grade = GradeInspection();
 
   StreamSubscription<Duration>? _solveSub;
@@ -112,7 +119,22 @@ class TimerBloc extends Bloc<TimerEvent, TimerState> {
     TimerStarted event,
     Emitter<TimerState> emit,
   ) async {
-    emit(state.copyWith(scramble: _newScramble(state.event)));
+    // Reopen on the last-selected event where the build persists one. Resolved
+    // through `WcaEvent.fromId`, which is lenient — a stale or unknown stored id
+    // falls back to 3×3 rather than throwing.
+    final String? stored = await _lastEventStore?.loadLastEvent();
+    final String eventId =
+        stored == null ? state.event : WcaEvent.fromId(stored).id;
+
+    emit(
+      state.copyWith(
+        event: eventId,
+        scramble: _newScramble(eventId),
+        // Seed the picker's `Recent` group with the restored event so it isn't
+        // pinned to a 3×3 the user didn't pick.
+        recentEvents: stored == null ? null : <String>[eventId],
+      ),
+    );
 
     await _sessionSub?.cancel();
     _sessionSub = _repository.watchSession().listen(
@@ -470,11 +492,9 @@ class TimerBloc extends Bloc<TimerEvent, TimerState> {
 
   // --- Scramble & event ------------------------------------------------------
 
-  /// A fresh scramble for [eventId].
-  ///
-  /// Returns [Scramble.empty] for an event with no scrambler yet, which the
-  /// card renders as an explicit "scrambles coming" state rather than a
-  /// silently substituted 3×3 scramble.
+  /// A fresh scramble for [eventId]. Every one of the 17 events has a real
+  /// scrambler now; the empty-scramble "scrambles coming" card only surfaces if
+  /// a future event ever ships without one (see [GenerateScramble.scrambleFor]).
   Scramble _newScramble(String eventId) {
     final WcaEvent event = WcaEvent.fromId(eventId);
     final Scramble scramble = _generateScramble.scrambleFor(event);
@@ -535,6 +555,12 @@ class TimerBloc extends Bloc<TimerEvent, TimerState> {
 
   void _onEventChanged(TimerEventChanged event, Emitter<TimerState> emit) {
     if (event.event == state.event) return;
+
+    // Remember it so the timer reopens here next launch. Fire-and-forget — the
+    // write must never make switching events feel laggy, and a lost write just
+    // reopens on the previous event, which is harmless.
+    unawaited(
+        _lastEventStore?.saveLastEvent(event.event) ?? Future<void>.value());
 
     // Most-recent-first, no duplicates, capped — this feeds the picker's
     // `Recent` group, and a list longer than the group can show is just memory
