@@ -1,17 +1,27 @@
 import 'package:bloc_test/bloc_test.dart';
 import 'package:cubeclash/core/di/injection.dart';
+import 'package:cubeclash/core/error/result.dart';
 import 'package:cubeclash/core/realtime/race_gateway.dart';
+import 'package:cubeclash/features/race/domain/entities/lobby_summary.dart';
 import 'package:cubeclash/features/race/domain/entities/race_room.dart';
+import 'package:cubeclash/features/race/domain/entities/tournament.dart';
+import 'package:cubeclash/features/race/domain/repositories/race_lobby_repository.dart';
+import 'package:cubeclash/features/race/domain/repositories/tournament_repository.dart';
 import 'package:cubeclash/features/race/presentation/bloc/race_bloc.dart';
 import 'package:cubeclash/features/race/presentation/pages/live_race_page.dart';
 import 'package:cubeclash/features/race/presentation/pages/race_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 
 import '../../support/harness.dart';
 
 class _MockRaceBloc extends MockBloc<RaceEvent, RaceState>
     implements RaceBloc {}
+
+class _MockLobbyRepository extends Mock implements RaceLobbyRepository {}
+
+class _MockTournamentRepository extends Mock implements TournamentRepository {}
 
 void main() {
   setUpAll(initTestFonts);
@@ -23,6 +33,42 @@ void main() {
     bloc = _MockRaceBloc();
     sl.unregister<RaceBloc>();
     sl.registerSingleton<RaceBloc>(bloc);
+
+    // Instant summary/tournament mocks so the golden captures a loaded lobby
+    // without leaving the fakes' delayed timers pending.
+    final _MockLobbyRepository lobbyRepo = _MockLobbyRepository();
+    when(lobbyRepo.summary).thenAnswer(
+      (_) async => const Ok<LobbySummary>(
+        LobbySummary(
+          elo: 1284,
+          globalRank: 1204,
+          wins: 63,
+          losses: 41,
+          bestSingleMs: 8420,
+          ao5Ms: 10960,
+          recentRivals: <Rival>[
+            Rival(
+              userId: 'u1',
+              displayName: 'Yuki Tanaka',
+              wins: 2,
+              losses: 3,
+              countryCode: 'JP',
+            ),
+          ],
+        ),
+      ),
+    );
+    sl
+      ..unregister<RaceLobbyRepository>()
+      ..registerSingleton<RaceLobbyRepository>(lobbyRepo);
+
+    final _MockTournamentRepository tournamentRepo =
+        _MockTournamentRepository();
+    when(tournamentRepo.getTournaments)
+        .thenAnswer((_) async => const Ok<List<Tournament>>(<Tournament>[]));
+    sl
+      ..unregister<TournamentRepository>()
+      ..registerSingleton<TournamentRepository>(tournamentRepo);
   });
 
   tearDown(resetDependencies);
@@ -82,7 +128,8 @@ void main() {
     await goldenFor(
       tester,
       const RacePage(),
-      const RaceState(),
+      // Connected: a normal lobby, without the "connecting…" banner.
+      const RaceState(connection: GatewayConnection.connected),
       name: 'lobby',
     );
   });
@@ -94,6 +141,7 @@ void main() {
       const RaceState(
         phase: RacePhase.searching,
         searchElapsed: Duration(seconds: 14),
+        connection: GatewayConnection.connected,
       ),
       name: 'matchmaking',
       // The searching pulse repeats forever.

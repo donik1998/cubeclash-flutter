@@ -1,7 +1,12 @@
 import 'package:bloc_test/bloc_test.dart';
 import 'package:cubeclash/core/di/injection.dart';
+import 'package:cubeclash/core/error/result.dart';
 import 'package:cubeclash/core/realtime/race_gateway.dart';
+import 'package:cubeclash/features/race/domain/entities/lobby_summary.dart';
 import 'package:cubeclash/features/race/domain/entities/race_room.dart';
+import 'package:cubeclash/features/race/domain/entities/tournament.dart';
+import 'package:cubeclash/features/race/domain/repositories/race_lobby_repository.dart';
+import 'package:cubeclash/features/race/domain/repositories/tournament_repository.dart';
 import 'package:cubeclash/features/race/presentation/bloc/race_bloc.dart';
 import 'package:cubeclash/features/race/presentation/pages/live_race_page.dart';
 import 'package:cubeclash/features/race/presentation/pages/race_page.dart';
@@ -14,6 +19,10 @@ import '../../support/harness.dart';
 class _MockRaceBloc extends MockBloc<RaceEvent, RaceState>
     implements RaceBloc {}
 
+class _MockLobbyRepository extends Mock implements RaceLobbyRepository {}
+
+class _MockTournamentRepository extends Mock implements TournamentRepository {}
+
 void main() {
   setUpAll(initTestFonts);
 
@@ -24,6 +33,39 @@ void main() {
     bloc = _MockRaceBloc();
     sl.unregister<RaceBloc>();
     sl.registerSingleton<RaceBloc>(bloc);
+
+    // The lobby now loads an Elo/stats summary and a tournament list. Swap the
+    // seeded fakes (which schedule real delayed timers) for instant mocks so
+    // pump()-based lobby tests don't leave a Timer pending after teardown.
+    final _MockLobbyRepository lobbyRepo = _MockLobbyRepository();
+    when(lobbyRepo.summary).thenAnswer(
+      (_) async => const Ok<LobbySummary>(
+        LobbySummary(elo: 1284, globalRank: 1204, wins: 63, losses: 41),
+      ),
+    );
+    sl
+      ..unregister<RaceLobbyRepository>()
+      ..registerSingleton<RaceLobbyRepository>(lobbyRepo);
+
+    final _MockTournamentRepository tournamentRepo =
+        _MockTournamentRepository();
+    when(tournamentRepo.getTournaments).thenAnswer(
+      (_) async => Ok<List<Tournament>>(<Tournament>[
+        Tournament(
+          id: 'weekly-333',
+          name: 'Global Weekly · 3×3',
+          event: '3x3',
+          status: TournamentStatus.live,
+          entrants: 48,
+          capacity: 64,
+          startsAt: DateTime(2026, 7, 21),
+          description: 'Open bracket.',
+        ),
+      ]),
+    );
+    sl
+      ..unregister<TournamentRepository>()
+      ..registerSingleton<TournamentRepository>(tournamentRepo);
   });
 
   tearDown(resetDependencies);
@@ -64,7 +106,11 @@ void main() {
 
   Future<void> pumpRace(WidgetTester tester, RaceState state) async {
     whenListen(bloc, const Stream<RaceState>.empty(), initialState: state);
-    await tester.pumpWidget(harnessPage(const RacePage()));
+    await tester.pumpWidget(
+      // The lobby shows a live "connecting…" spinner while disconnected, which
+      // never settles; disable animations so pumpAndSettle-based tests work.
+      harnessPage(const RacePage(), disableAnimations: true),
+    );
     await tester.pump();
   }
 
@@ -132,17 +178,18 @@ void main() {
       expect(find.text('Copy'), findsOneWidget);
     });
 
-    testWidgets('every tournament reads as unbuilt, not live',
+    testWidgets('the tournaments tab lists real, labelled-demo brackets',
         (WidgetTester tester) async {
       await pumpRace(tester, const RaceState());
       await tester.tap(find.text('Tournaments'));
       await tester.pumpAndSettle();
 
+      // A real, loadable tournament — flagged as demo data, not a fake `SOON`.
       expect(find.text('Global Weekly · 3×3'), findsOneWidget);
-      // The frame's first card is a LIVE tournament with an Enter button.
-      // There is no tournament backend, so nothing claims to be running.
-      expect(find.text('SOON'), findsNWidgets(3));
-      expect(find.text('LIVE'), findsNothing);
+      expect(find.text('LIVE'), findsOneWidget);
+      expect(find.textContaining('Demo data'), findsOneWidget);
+      expect(find.text('SOON'), findsNothing);
+      expect(find.text('View bracket'), findsOneWidget);
     });
   });
 

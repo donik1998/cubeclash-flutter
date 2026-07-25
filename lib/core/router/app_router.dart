@@ -9,6 +9,7 @@ import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/profile/presentation/pages/settings_page.dart';
 import '../../features/race/presentation/pages/live_race_page.dart';
 import '../../features/race/presentation/pages/race_page.dart';
+import '../../features/race/presentation/pages/tournament_detail_page.dart';
 import '../../features/stats/presentation/pages/player_profile_page.dart';
 import '../../features/stats/presentation/pages/stats_page.dart';
 import '../../features/timer/presentation/pages/session_history_page.dart';
@@ -140,6 +141,13 @@ class AppRouter {
                         path: 'live',
                         parentNavigatorKey: _rootNav,
                         builder: (context, state) => const LiveRacePage(),
+                      ),
+                      GoRoute(
+                        path: 'tournament/:id',
+                        parentNavigatorKey: _rootNav,
+                        builder: (context, state) => TournamentDetailPage(
+                          id: state.pathParameters['id']!,
+                        ),
                       ),
                     ],
                   ),

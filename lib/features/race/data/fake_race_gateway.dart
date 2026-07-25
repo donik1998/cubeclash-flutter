@@ -22,12 +22,22 @@ import '../../timer/domain/usecases/generate_scramble.dart';
 /// sometimes. A fake that always lets you win would hide every bug in the
 /// losing path.
 class FakeRaceGateway implements RaceGateway {
-  FakeRaceGateway({Random? random, GenerateScramble? generateScramble})
-      : _random = random ?? Random(),
-        _generateScramble = generateScramble ?? GenerateScramble();
+  FakeRaceGateway({
+    Random? random,
+    GenerateScramble? generateScramble,
+    double? opponentDropChance,
+  })  : _random = random ?? Random(),
+        _generateScramble = generateScramble ?? GenerateScramble(),
+        _dropChance = opponentDropChance ?? 0.35;
 
   final Random _random;
   final GenerateScramble _generateScramble;
+
+  /// How often the opponent's connection blips mid-solve. Real races drop
+  /// sometimes, and the reconnect path is one of the more interesting things
+  /// the bloc handles, so the demo shows it off roughly a third of the time.
+  /// Injectable so a test can force it on (1.0) or off (0.0).
+  final double _dropChance;
 
   /// The event this room is racing. Set by [createRace]; a joined room learns
   /// it from the host's `race:state`, which the fake mirrors back.
@@ -73,10 +83,29 @@ class FakeRaceGateway implements RaceGateway {
   bool _opponentSubmitted = false;
   bool _settled = false;
 
-  static const String _opponentId = 'bot-1';
-  static const String _opponentName = 'Kenji Sato';
-  static const String _opponentCountry = 'JP';
+  /// Whether the opponent is currently connected — flipped false for a beat
+  /// during the mid-solve blip, then true again on reconnect.
+  bool _oppConnected = true;
+
   static const String _youId = 'me';
+
+  /// A roster to draw from, so a run of races isn't the same face every time.
+  /// One is picked per race in [_reset].
+  static const List<_Opponent> _roster = <_Opponent>[
+    _Opponent('bot-1', 'Kenji Sato', 'JP'),
+    _Opponent('bot-2', 'Lucia Moreno', 'ES'),
+    _Opponent('bot-3', 'Aiden Walsh', 'IE'),
+    _Opponent('bot-4', 'Fatima Zahra', 'MA'),
+    _Opponent('bot-5', 'Viktor Petrov', 'BG'),
+    _Opponent('bot-6', 'Mei Lin', 'CN'),
+    _Opponent('bot-7', 'Daniel Okafor', 'NG'),
+    _Opponent('bot-8', 'Sofia Almeida', 'BR'),
+  ];
+
+  late _Opponent _opponent = _roster.first;
+  String get _opponentId => _opponent.id;
+  String get _opponentName => _opponent.name;
+  String get _opponentCountry => _opponent.country;
 
   void _later(Duration delay, void Function() action) {
     if (_disposed) return;
@@ -127,14 +156,29 @@ class FakeRaceGateway implements RaceGateway {
   /// A believable solve time for [event]. A 2×2 opponent finishing in
   /// fourteen seconds would break the demo as thoroughly as a 5×5 one
   /// finishing in nine.
-  int _plausibleTimeMs(WcaEvent event) => switch (event.cubeSize ?? 3) {
-        2 => 3000 + _random.nextInt(4000),
-        3 => 9000 + _random.nextInt(9000),
-        4 => 38000 + _random.nextInt(30000),
-        5 => 70000 + _random.nextInt(50000),
-        6 => 140000 + _random.nextInt(80000),
-        _ => 210000 + _random.nextInt(120000),
-      };
+  int _plausibleTimeMs(WcaEvent event) {
+    // The two non-cube events that are raceable have no [cubeSize] to switch on.
+    switch (event.id) {
+      case 'clock':
+        return 6000 + _random.nextInt(6000);
+      case 'pyraminx':
+        return 4000 + _random.nextInt(5000);
+      case 'skewb':
+        return 4500 + _random.nextInt(5000);
+      case 'square-1':
+        return 9000 + _random.nextInt(8000);
+      case 'megaminx':
+        return 45000 + _random.nextInt(35000);
+    }
+    return switch (event.cubeSize ?? 3) {
+      2 => 3000 + _random.nextInt(4000),
+      3 => 9000 + _random.nextInt(9000),
+      4 => 38000 + _random.nextInt(30000),
+      5 => 70000 + _random.nextInt(50000),
+      6 => 140000 + _random.nextInt(80000),
+      _ => 210000 + _random.nextInt(120000),
+    };
+  }
 
   @override
   void joinByCode(String code) {
@@ -214,6 +258,8 @@ class FakeRaceGateway implements RaceGateway {
     _opponentTargetMs = _plausibleTimeMs(event);
     final bool opponentDnfs = _random.nextDouble() < 0.08;
 
+    _maybeScheduleDrop();
+
     final Duration tick = event.isLongForm || (event.cubeSize ?? 3) >= 5
         ? const Duration(milliseconds: 250)
         : const Duration(milliseconds: 100);
@@ -224,6 +270,11 @@ class FakeRaceGateway implements RaceGateway {
         t.cancel();
         return;
       }
+      // A disconnected opponent's progress stops arriving — their bar freezes
+      // where it was and resumes on reconnect, which is exactly the state the
+      // race screen's connection indicator exists to show.
+      if (!_oppConnected) return;
+
       elapsed += tick.inMilliseconds;
       _opponentProgress.add(elapsed);
 
@@ -235,6 +286,34 @@ class FakeRaceGateway implements RaceGateway {
       }
     });
     _timers.add(timer);
+  }
+
+  /// Occasionally drops the opponent's connection partway through their solve
+  /// and restores it a beat later — the reconnect path, demoed live. Never
+  /// fires once a race has settled.
+  void _maybeScheduleDrop() {
+    if (_random.nextDouble() >= _dropChance) return;
+
+    // Somewhere in the first half of the solve, so the reconnect still lands
+    // before they finish.
+    final int at =
+        (_opponentTargetMs * (0.2 + _random.nextDouble() * 0.3)).round();
+    _later(Duration(milliseconds: at), () {
+      if (_settled) return;
+      _oppConnected = false;
+      _emitState(
+          status: 'racing', withOpponent: true, youReady: true, oppReady: true);
+
+      _later(const Duration(milliseconds: 1300), () {
+        if (_settled) return;
+        _oppConnected = true;
+        _emitState(
+            status: 'racing',
+            withOpponent: true,
+            youReady: true,
+            oppReady: true);
+      });
+    });
   }
 
   @override
@@ -283,11 +362,13 @@ class FakeRaceGateway implements RaceGateway {
 
   void _reset() {
     _cancelTimers();
+    _opponent = _roster[_random.nextInt(_roster.length)];
     _youReady = false;
     _oppReady = false;
     _youSubmitted = false;
     _opponentSubmitted = false;
     _settled = false;
+    _oppConnected = true;
     _yourTimeMs = 0;
   }
 
@@ -328,7 +409,7 @@ class FakeRaceGateway implements RaceGateway {
             'country': _opponentCountry,
             'ready': _oppReady,
             'is_me': false,
-            'connected': true,
+            'connected': _oppConnected,
           },
       ],
     });
@@ -356,4 +437,13 @@ class FakeRaceGateway implements RaceGateway {
     await _result.close();
     await _connection.close();
   }
+}
+
+/// One scripted opponent identity, drawn from [FakeRaceGateway._roster].
+class _Opponent {
+  const _Opponent(this.id, this.name, this.country);
+
+  final String id;
+  final String name;
+  final String country;
 }
