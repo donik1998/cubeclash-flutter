@@ -51,7 +51,7 @@ void main() {
       (_) async => Ok<Leaderboard>(
         Leaderboard(
           entries: <LeaderboardEntry>[entry(1), entry(2)],
-          currentUser: me,
+          viewer: me,
         ),
       ),
     );
@@ -158,7 +158,7 @@ void main() {
       final StatsCubit cubit = build();
       await cubit.loadLeaderboard();
 
-      expect(cubit.state.pinnedCurrentUser?.userId, 'me');
+      expect(cubit.state.pinnedViewer?.userId, 'me');
     });
 
     test('does not pin a duplicate when their row is already visible',
@@ -172,7 +172,7 @@ void main() {
         (_) async => Ok<Leaderboard>(
           Leaderboard(
             entries: <LeaderboardEntry>[entry(1), entry(2, id: 'me')],
-            currentUser: me,
+            viewer: me,
           ),
         ),
       );
@@ -180,7 +180,7 @@ void main() {
       final StatsCubit cubit = build();
       await cubit.loadLeaderboard();
 
-      expect(cubit.state.pinnedCurrentUser, isNull);
+      expect(cubit.state.pinnedViewer, isNull);
     });
 
     test('changing scope refetches and drops the stale page', () async {
@@ -211,6 +211,52 @@ void main() {
           )).called(1);
     });
 
+    test('changing metric to ao12 refetches with the ao12 wire value',
+        () async {
+      final StatsCubit cubit = build();
+      await cubit.loadLeaderboard();
+      await cubit.changeMetric(LeaderboardMetric.ao12);
+
+      expect(cubit.state.metric, LeaderboardMetric.ao12);
+      expect(LeaderboardMetric.ao12.wire, 'ao12');
+      verify(() => repository.getLeaderboard(
+            event: any(named: 'event'),
+            metric: LeaderboardMetric.ao12,
+            scope: any(named: 'scope'),
+            cursor: null,
+          )).called(1);
+    });
+
+    test('a failure surfaces as leaderboardFailure', () async {
+      when(() => repository.getLeaderboard(
+            event: any(named: 'event'),
+            metric: any(named: 'metric'),
+            scope: any(named: 'scope'),
+            cursor: any(named: 'cursor'),
+          )).thenAnswer(
+        (_) async => const Err<Leaderboard>(NetworkFailure('offline')),
+      );
+
+      final StatsCubit cubit = build();
+      await cubit.loadLeaderboard();
+
+      expect(cubit.state.leaderboardFailure, isA<NetworkFailure>());
+      expect(cubit.state.isLoadingLeaderboard, isFalse);
+      expect(cubit.state.pinnedViewer, isNull);
+    });
+
+    test('the viewer is surfaced and pinned when off the loaded page',
+        () async {
+      final StatsCubit cubit = build();
+      await cubit.loadLeaderboard();
+
+      // Default stub returns entries [1,2] and viewer=me(rank 47), so the
+      // viewer is not on the page and must be pinned.
+      expect(cubit.state.leaderboard?.viewer?.userId, 'me');
+      expect(cubit.state.pinnedViewer?.userId, 'me');
+      expect(cubit.state.pinnedViewer?.isCurrentUser, isTrue);
+    });
+
     test('re-selecting the current scope does not refetch', () async {
       final StatsCubit cubit = build();
       await cubit.loadLeaderboard();
@@ -234,7 +280,7 @@ void main() {
         (_) async => Ok<Leaderboard>(
           Leaderboard(
             entries: <LeaderboardEntry>[entry(1)],
-            currentUser: me,
+            viewer: me,
             nextCursor: '1',
           ),
         ),
@@ -257,9 +303,9 @@ void main() {
       expect(cubit.state.leaderboard?.entries, hasLength(2));
       expect(cubit.state.leaderboard?.hasMore, isFalse);
       expect(
-        cubit.state.pinnedCurrentUser?.userId,
+        cubit.state.pinnedViewer?.userId,
         'me',
-        reason: 'a page that omits current_user must not drop it',
+        reason: 'a page that omits viewer must not drop it',
       );
     });
 

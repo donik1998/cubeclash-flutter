@@ -7,10 +7,10 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/widgets.dart';
-import '../../domain/entities/leaderboard_entry.dart';
 import '../../domain/entities/player_stats.dart';
 import '../cubit/stats_cubit.dart';
 import '../widgets/distribution_chart.dart';
+import '../widgets/leaderboard_view.dart';
 import '../widgets/progress_chart.dart';
 
 /// The Stats tab — `/stats`. Segmented into My Stats and Leaderboards.
@@ -59,7 +59,8 @@ class _StatsView extends StatelessWidget {
               Expanded(
                 child: switch (state.segment) {
                   StatsSegment.myStats => _MyStats(state: state),
-                  StatsSegment.leaderboards => _Leaderboards(state: state),
+                  StatsSegment.leaderboards =>
+                    _LeaderboardsSegment(state: state),
                 },
               ),
             ],
@@ -203,185 +204,40 @@ class _NeedMoreSolves extends StatelessWidget {
 
 // --- Segment 2: Leaderboards -------------------------------------------------
 
-class _Leaderboards extends StatefulWidget {
-  const _Leaderboards({required this.state});
+/// Layer A for the Leaderboards segment: reads the cubit and hands plain values
+/// and callbacks to the pure [LeaderboardView]. No layout or styling here.
+class _LeaderboardsSegment extends StatelessWidget {
+  const _LeaderboardsSegment({required this.state});
 
   final StatsState state;
-
-  @override
-  State<_Leaderboards> createState() => _LeaderboardsState();
-}
-
-class _LeaderboardsState extends State<_Leaderboards> {
-  final ScrollController _controller = ScrollController();
-
-  @override
-  void initState() {
-    super.initState();
-    _controller.addListener(_onScroll);
-  }
-
-  @override
-  void dispose() {
-    _controller
-      ..removeListener(_onScroll)
-      ..dispose();
-    super.dispose();
-  }
-
-  void _onScroll() {
-    if (!_controller.hasClients) return;
-    final double remaining =
-        _controller.position.maxScrollExtent - _controller.position.pixels;
-    if (remaining < 400) context.read<StatsCubit>().loadMoreLeaderboard();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final StatsState state = widget.state;
-    final StatsCubit cubit = context.read<StatsCubit>();
-
-    return Column(
-      children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-          child: Column(
-            children: <Widget>[
-              AppSegmentedControl(
-                segments: LeaderboardScope.values
-                    .map((LeaderboardScope s) => s.label)
-                    .toList(),
-                selectedIndex: state.scope.index,
-                onChanged: (int i) =>
-                    cubit.changeScope(LeaderboardScope.values[i]),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Row(
-                children: <Widget>[
-                  for (final LeaderboardMetric metric
-                      in LeaderboardMetric.values) ...<Widget>[
-                    AppChip(
-                      label: metric.label,
-                      selected: state.metric == metric,
-                      onTap: () => cubit.changeMetric(metric),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Expanded(
-            child: _LeaderboardBody(state: state, controller: _controller)),
-        // The user's own row, pinned, when it isn't already on screen — the
-        // most useful thing a leaderboard can tell you is where you are.
-        if (state.pinnedCurrentUser case final LeaderboardEntry me)
-          _PinnedRow(entry: me),
-      ],
-    );
-  }
-}
-
-class _LeaderboardBody extends StatelessWidget {
-  const _LeaderboardBody({required this.state, required this.controller});
-
-  final StatsState state;
-  final ScrollController controller;
 
   @override
   Widget build(BuildContext context) {
     final StatsCubit cubit = context.read<StatsCubit>();
 
-    if (state.isLoadingLeaderboard) return const LoadingState();
+    // Surface the error only when there is nothing usable to show; a failure
+    // on top of an already-loaded page keeps the page.
+    final bool hasNothing = state.leaderboard?.entries.isEmpty ?? true;
+    final String? failureMessage =
+        (state.leaderboardFailure != null && hasNothing)
+            ? state.leaderboardFailure!.message
+            : null;
 
-    if (state.leaderboardFailure != null &&
-        (state.leaderboard?.entries.isEmpty ?? true)) {
-      return ErrorState(
-        message: state.leaderboardFailure!.message,
-        onRetry: cubit.loadLeaderboard,
-      );
-    }
-
-    if (state.leaderboardEmpty) {
-      return EmptyState(
-        icon: Icons.leaderboard_outlined,
-        title: switch (state.scope) {
-          LeaderboardScope.friends => 'No friends ranked yet',
-          LeaderboardScope.country => 'Nobody from your country yet',
-          LeaderboardScope.global => 'No rankings yet',
-        },
-        message: state.scope == LeaderboardScope.friends
-            ? 'Add friends and their times will show up here.'
-            : 'Check back once more people have competed.',
-      );
-    }
-
-    final List<LeaderboardEntry> entries = state.leaderboard!.entries;
-
-    return ListView.builder(
-      controller: controller,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-      itemCount: entries.length + (state.isLoadingMore ? 1 : 0),
-      itemBuilder: (BuildContext context, int index) {
-        if (index >= entries.length) {
-          return const Padding(
-            padding: EdgeInsets.all(AppSpacing.lg),
-            child: Center(
-              child: SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          );
-        }
-
-        final LeaderboardEntry entry = entries[index];
-        return LeaderboardRow(
-          rank: entry.rank,
-          displayName: entry.displayName,
-          time: TimeText.format(entry.timeMs),
-          countryCode: entry.countryCode,
-          avatarUrl: entry.avatarUrl,
-          isCurrentUser: entry.isCurrentUser,
-          onTap: () => context.push('/stats/player/${entry.userId}'),
-        );
-      },
-    );
-  }
-}
-
-class _PinnedRow extends StatelessWidget {
-  const _PinnedRow({required this.entry});
-
-  final LeaderboardEntry entry;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppColors colors = context.colors;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: colors.bgSurface,
-        border: Border(top: BorderSide(color: colors.borderSubtle)),
-      ),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.sm,
-      ),
-      child: SafeArea(
-        top: false,
-        child: LeaderboardRow(
-          rank: entry.rank,
-          displayName: entry.displayName,
-          time: TimeText.format(entry.timeMs),
-          countryCode: entry.countryCode,
-          avatarUrl: entry.avatarUrl,
-          isCurrentUser: true,
-        ),
-      ),
+    return LeaderboardView(
+      scope: state.scope,
+      metric: state.metric,
+      isLoading: state.isLoadingLeaderboard,
+      isLoadingMore: state.isLoadingMore,
+      isEmpty: state.leaderboardEmpty,
+      failureMessage: failureMessage,
+      leaderboard: state.leaderboard,
+      pinnedViewer: state.pinnedViewer,
+      onScopeChanged: cubit.changeScope,
+      onMetricChanged: cubit.changeMetric,
+      onRetry: cubit.loadLeaderboard,
+      onLoadMore: cubit.loadMoreLeaderboard,
+      onTapEntry: (String userId) => context.push('/stats/player/$userId'),
+      formatTime: TimeText.format,
     );
   }
 }

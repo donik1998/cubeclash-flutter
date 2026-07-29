@@ -133,7 +133,7 @@ void main() {
   });
 
   group('LeaderboardRow', () {
-    testWidgets('renders rank, name, flag and time',
+    testWidgets('renders rank, name, country name and time',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         harness(
@@ -152,7 +152,27 @@ void main() {
       expect(find.text('1'), findsOneWidget);
       expect(find.text('Ada Speedcube'), findsOneWidget);
       expect(find.text('6.12'), findsOneWidget);
-      expect(find.text('🇬🇧'), findsOneWidget);
+      // Country is a NAME, not a flag emoji.
+      expect(find.text('United Kingdom'), findsOneWidget);
+    });
+
+    testWidgets('falls back to the raw code for an unknown country',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        harness(
+          const SizedBox(
+            width: 360,
+            child: LeaderboardRow(
+              rank: 4,
+              displayName: 'Nobody',
+              time: '9.00',
+              countryCode: 'ZZ', // not in kCountryNames
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('ZZ'), findsOneWidget);
     });
   });
 

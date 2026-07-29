@@ -59,12 +59,12 @@ class StatsState extends Equatable {
       leaderboardFailure == null &&
       (leaderboard?.entries.isEmpty ?? true);
 
-  /// Show the user's own row pinned at the bottom only when it isn't already
+  /// Show the viewer's own row pinned at the bottom only when it isn't already
   /// on screen.
-  LeaderboardEntry? get pinnedCurrentUser {
+  LeaderboardEntry? get pinnedViewer {
     final Leaderboard? board = leaderboard;
-    if (board == null || board.currentUserVisible) return null;
-    return board.currentUser;
+    if (board == null || board.viewerVisible) return null;
+    return board.viewer;
   }
 
   StatsState copyWith({
@@ -243,7 +243,8 @@ class StatsCubit extends Cubit<StatsState> {
           state.copyWith(
             leaderboard: Leaderboard(
               entries: <LeaderboardEntry>[...board!.entries, ...value.entries],
-              currentUser: value.currentUser ?? board.currentUser,
+              // A page that omits `viewer` must not drop the one we already have.
+              viewer: value.viewer ?? board.viewer,
               nextCursor: value.nextCursor,
             ),
             isLoadingMore: false,

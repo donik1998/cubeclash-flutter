@@ -125,7 +125,7 @@ void main() {
       expect(first.entries.length, greaterThan(10));
       expect(first.hasMore, isTrue,
           reason: 'first page should not be the last');
-      expect(first.currentUserVisible, isFalse,
+      expect(first.viewerVisible, isFalse,
           reason: 'rank 47 is below the first page, so the pin should show');
 
       // Page to the end; the user row must appear so the pin retires.

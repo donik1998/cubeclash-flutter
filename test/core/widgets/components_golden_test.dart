@@ -158,7 +158,7 @@ void main() {
         ],
       ),
       name: 'leaderboard_row',
-      surfaceSize: const Size(380, 320),
+      surfaceSize: const Size(380, 380),
     );
   });
 

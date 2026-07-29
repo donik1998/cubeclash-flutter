@@ -6,6 +6,7 @@ import '../../../../core/network/dio_failures.dart';
 import '../../domain/entities/leaderboard_entry.dart';
 import '../../domain/entities/player_stats.dart';
 import '../../domain/repositories/stats_repository.dart';
+import '../models/leaderboard_dto.dart';
 
 /// The real [StatsRepository].
 ///
@@ -59,19 +60,14 @@ class StatsRepositoryImpl implements StatsRepository {
             },
           );
 
-          final Map<String, dynamic> body = asJsonMap(response.data);
-          final List<dynamic> items =
-              (body['items'] as List<dynamic>?) ?? <dynamic>[];
-          final dynamic me = body['current_user'];
-
-          return Leaderboard(
-            entries:
-                items.map((dynamic e) => _entryFromJson(asJsonMap(e))).toList(),
-            currentUser: me is Map
-                ? _entryFromJson(asJsonMap(me), isCurrentUser: true)
-                : null,
-            nextCursor: body['next_cursor'] as String?,
+          // DTO (total wire mirror) → mapper (drop rules) → domain model. An
+          // unknown event never reaches here — the server returns the standard
+          // error envelope (`unknown_event`) and `dioFailure` maps the non-2xx
+          // to a Failure before we ever parse a body.
+          final LeaderboardResponseDto dto = LeaderboardResponseDto.fromJson(
+            asJsonMap(response.data),
           );
+          return LeaderboardMapper.responseToDomain(dto);
         },
         onError: dioFailure,
       );
@@ -122,20 +118,6 @@ class StatsRepositoryImpl implements StatsRepository {
         fromMs: _int(json['from_ms']) ?? 0,
         toMs: _int(json['to_ms']) ?? 0,
         count: _int(json['count']) ?? 0,
-      );
-
-  static LeaderboardEntry _entryFromJson(
-    Map<String, dynamic> json, {
-    bool isCurrentUser = false,
-  }) =>
-      LeaderboardEntry(
-        userId: json['user_id'] as String? ?? '',
-        rank: _int(json['rank']) ?? 0,
-        displayName: json['display_name'] as String? ?? 'Unknown',
-        timeMs: _int(json['time_ms']) ?? 0,
-        countryCode: json['country'] as String?,
-        avatarUrl: json['avatar_url'] as String?,
-        isCurrentUser: isCurrentUser || (json['is_me'] as bool? ?? false),
       );
 
   static PlayerProfile _profileFromJson(Map<String, dynamic> json) {

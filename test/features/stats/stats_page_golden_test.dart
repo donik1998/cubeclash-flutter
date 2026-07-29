@@ -106,7 +106,7 @@ void main() {
         countryCode: 'DE',
       ),
     ],
-    currentUser: LeaderboardEntry(
+    viewer: LeaderboardEntry(
       userId: 'me',
       rank: 47,
       displayName: 'You',

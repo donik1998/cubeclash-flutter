@@ -111,16 +111,17 @@ class FakeStatsRepository implements StatsRepository {
     }
     final int end = (start + _pageSize).clamp(0, all.length);
 
-    // The user's own row travels with every page so the screen can pin it while
-    // it is off-screen; once a page actually contains rank 47 the board's
-    // `currentUserVisible` flips and the pin drops itself.
+    // The user's own row travels as the separate `viewer` field on every page
+    // so the screen can pin it while it is off-screen; once a page actually
+    // contains rank 47 the board's `viewerVisible` flips and the pin drops
+    // itself.
     final LeaderboardEntry me =
         all.firstWhere((LeaderboardEntry e) => e.userId == currentUserId);
 
     return Ok<Leaderboard>(
       Leaderboard(
         entries: all.sublist(start, end),
-        currentUser: me,
+        viewer: me,
         nextCursor: end < all.length ? '$end' : null,
       ),
     );
@@ -218,11 +219,15 @@ class FakeStatsRepository implements StatsRepository {
     LeaderboardScope scope,
   ) {
     final double scale = _eventScale(event);
-    final int aoOffset = (1800 * scale).round();
-    int timeFor(int singleMs) =>
-        ((metric == LeaderboardMetric.single ? singleMs : singleMs + aoOffset) *
-                scale)
-            .round();
+    // An average is slower than a single, and ao12 (a wider window, so a worse
+    // trimmed mean is more likely) slower still — so the three chips show
+    // visibly different boards. Offsets are pre-scale; `timeFor` scales once.
+    final int aoOffset = switch (metric) {
+      LeaderboardMetric.single => 0,
+      LeaderboardMetric.ao5 => 1800,
+      LeaderboardMetric.ao12 => 2600,
+    };
+    int timeFor(int singleMs) => ((singleMs + aoOffset) * scale).round();
 
     // Scope narrows the pool. Friends and country are short boards the user
     // sits inside, so their row shows inline and no pin is needed.
