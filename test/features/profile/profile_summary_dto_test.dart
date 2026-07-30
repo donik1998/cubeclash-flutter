@@ -2,6 +2,8 @@ import 'package:cubeclash/features/profile/data/models/profile_summary_dto.dart'
 import 'package:cubeclash/features/profile/domain/entities/profile_summary.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../support/fixtures.dart';
+
 /// One well-formed wire response.
 Map<String, dynamic> body({
   Map<String, dynamic>? user,
@@ -40,6 +42,24 @@ Map<String, dynamic> body({
 const Object _absent = Object();
 
 void main() {
+  group('real captured bytes — me_profile.json', () {
+    test('the live server response maps to a domain summary', () {
+      final ProfileSummary? summary = ProfileSummaryMapper.toDomain(
+        ProfileSummaryDto.fromJson(loadApiFixture('me_profile')),
+      );
+
+      expect(summary, isNotNull);
+      expect(summary!.displayName, 'kian_r');
+      expect(summary.countryCode, 'IR');
+      expect(summary.elo, 1000);
+      expect(summary.rank?.position, 1);
+      expect(summary.totalSolves, 12);
+      expect(summary.winRate, isNull,
+          reason: 'win_rate is null until races exist');
+      expect(summary.friendCount, 0);
+    });
+  });
+
   group('ProfileSummaryDto', () {
     test('decoding {} throws nothing and leaves every field null', () {
       final ProfileSummaryDto dto =

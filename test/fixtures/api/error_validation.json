@@ -1,0 +1,13 @@
+{
+  "error": {
+    "code": "validation_failed",
+    "message": "Request validation failed",
+    "details": {
+      "fields": [
+        "email must be an email",
+        "password must be at least 8 characters",
+        "display_name must be longer than or equal to 2 characters"
+      ]
+    }
+  }
+}

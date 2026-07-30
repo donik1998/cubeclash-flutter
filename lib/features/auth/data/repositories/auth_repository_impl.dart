@@ -60,8 +60,15 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<Result<void>> logout() async {
+    // The live server revokes by refresh token, not access token: `POST
+    // /auth/logout` requires `{ refresh }` in the body (a bare call 400s with
+    // "refresh should not be empty"). Capture it before the local clear below.
+    final String? refresh = _tokens.refreshToken;
     final Result<void> result = await Result.guard<void>(
-      () => _client.dio.post<dynamic>('/auth/logout'),
+      () => _client.dio.post<dynamic>(
+        '/auth/logout',
+        data: <String, dynamic>{if (refresh != null) 'refresh': refresh},
+      ),
       onError: dioFailure,
     );
     // Local clear happens whatever the server said — see ProfileRepositoryImpl

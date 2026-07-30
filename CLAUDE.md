@@ -228,6 +228,38 @@ encodes this and will tell you to tighten it if the token is ever darkened.
 - Analyze: `flutter analyze`
 - Test: `flutter test`
 - Quality gate (matches CI): `dart format --output=none --set-exit-if-changed . && flutter analyze && flutter test`
+- Live integration suite (needs a running backend, **skipped in CI**):
+  `flutter test test/integration/live_api_test.dart --dart-define=LIVE_API=true --dart-define=API_BASE_URL=http://localhost:3100`
+
+## Live backend wiring (verified July 2026)
+
+The real repositories were exercised against a running `cubeclash-backend` and
+the parse paths corrected to the actual bytes. Ground truth lives in two places:
+
+- **`test/fixtures/api/*.json`** — real captured responses. `test/data/live_wire_test.dart`
+  parses them through the real repositories + Dio (offline, always runs), and
+  the leaderboard/profile-summary DTO tests decode them too. These are the
+  source of truth for DTO shape.
+- **`test/integration/live_api_test.dart`** — end-to-end against the server,
+  gated on `--dart-define=LIVE_API=true` so CI stays green without one.
+
+Contract corrections applied (the fakes were forgiving; real bytes were not):
+
+- **`GET /stats` averages are `ao5` / `ao12` / `ao100`**, not the `best_ao*_ms`
+  the client first proposed. `StatsRepositoryImpl` now reads the real keys
+  (old ones kept as fallback). The server does **not** return `progress` /
+  `distribution` arrays yet, so the charts have no data — parsed leniently
+  (empty, not a crash); a backend gap, not a client bug.
+- **`POST /auth/logout` requires `{ refresh }` in the body** and revokes *by
+  refresh token* (a bare call 400s). Both `AuthRepositoryImpl.logout` and
+  `ProfileRepositoryImpl.logout` now send it.
+- **`GET /leaderboard` and `GET /me/profile` now require a JWT** (the old
+  `X-User-Id` header is gone). The shared `AuthInterceptor` already attaches
+  `Authorization: Bearer <access>` to every request, and its single-flight
+  refresh survives the server's strict single-use rotation — both proven live.
+- `GET /users/:id` returns identity only (`id/display_name/country/elo`); it
+  carries no bests or head-to-head yet, so the Player Profile shows those as
+  em-dashes until the backend grows them. Lenient parsing, no crash.
 
 ## Getting started — generate native platform folders
 

@@ -2,6 +2,8 @@ import 'package:cubeclash/features/stats/data/models/leaderboard_dto.dart';
 import 'package:cubeclash/features/stats/domain/entities/leaderboard_entry.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../support/fixtures.dart';
+
 /// One well-formed wire row.
 Map<String, dynamic> row({
   Object? rank = 1,
@@ -56,6 +58,23 @@ void main() {
       );
       expect(dto.rank, 3);
       expect(dto.valueMs, 6310);
+    });
+  });
+
+  group('real captured bytes — leaderboard.json', () {
+    test('the live server response maps to a full board with a viewer', () {
+      final LeaderboardResponseDto dto =
+          LeaderboardResponseDto.fromJson(loadApiFixture('leaderboard'));
+      final Leaderboard board = LeaderboardMapper.responseToDomain(dto);
+
+      expect(board.entries, hasLength(4));
+      expect(board.entries.first.displayName, 'kian_r');
+      expect(board.entries.first.timeMs, 6289);
+      expect(board.entries.last.countryCode, isNull,
+          reason: 'flowtest has a null country in the fixture');
+      expect(board.nextCursor, isNull);
+      expect(board.viewer?.rank, 1);
+      expect(board.viewer?.isCurrentUser, isTrue);
     });
   });
 

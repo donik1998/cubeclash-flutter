@@ -94,9 +94,15 @@ class ProfileRepositoryImpl implements ProfileRepository {
 
   @override
   Future<Result<void>> logout() async {
-    // Tell the server first so it can revoke the refresh token…
+    // Tell the server first so it can revoke the refresh token. The live
+    // `POST /auth/logout` revokes *by refresh token* and requires it in the
+    // body — a bare call 400s. Capture it before the local clear below.
+    final String? refresh = _tokens.refreshToken;
     final Result<void> result = await Result.guard<void>(
-      () => _client.dio.post<dynamic>('/auth/logout'),
+      () => _client.dio.post<dynamic>(
+        '/auth/logout',
+        data: <String, dynamic>{if (refresh != null) 'refresh': refresh},
+      ),
       onError: dioFailure,
     );
     // …but clear locally regardless. A logout that leaves you signed in

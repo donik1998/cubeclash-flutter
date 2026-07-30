@@ -10,15 +10,19 @@ import '../models/leaderboard_dto.dart';
 
 /// The real [StatsRepository].
 ///
-/// Written against the documented endpoints (docs → API Design § Stats &
-/// leaderboards) ahead of the backend existing. Two caveats worth being honest
-/// about, both flagged in the vault digest as gaps:
+/// Verified against the live server (real captured bytes, July 2026). Two notes
+/// worth being honest about:
 ///
-///  * `GET /stats` is documented only by prose ("best, ao5/ao12/ao100, per-source
-///    averages, distribution, efficiency index") with no field names. The
-///    `snake_case` keys parsed below are this client's proposal; the server
-///    should be built to match, or these change.
-///  * `GET /leaderboard` has no documented row shape either. Same deal.
+///  * `GET /stats` returns `{event, best_single_ms, ao5, ao12, ao100,
+///    session_average, pb_count, solve_count}` — the average keys are `ao5` /
+///    `ao12` / `ao100`, **not** the `best_ao*_ms` this client first proposed.
+///    Those are the current rolling averages (the server does not yet expose a
+///    best-of-window figure); we surface them in the "Best Ao5" cards as the
+///    closest available value. The server does **not** return `progress` or
+///    `distribution` arrays, so the charts have no data yet — parsed leniently
+///    (absent → empty) rather than crashing; a real backend gap to close.
+///  * `GET /leaderboard` matches the client row shape exactly (`items` /
+///    `next_cursor` / `viewer`, ranking value as `value_ms`).
 ///
 /// Parsing is deliberately lenient — a missing optional key yields `null`
 /// rather than an exception, so a partially-implemented endpoint degrades to a
@@ -90,9 +94,13 @@ class StatsRepositoryImpl implements StatsRepository {
       event: json['event'] as String? ?? event,
       solveCount: _int(json['solve_count']) ?? 0,
       bestSingleMs: _int(json['best_single_ms']),
-      bestAo5Ms: _int(json['best_ao5_ms']),
-      bestAo12Ms: _int(json['best_ao12_ms']),
-      bestAo100Ms: _int(json['best_ao100_ms']),
+      // The live server names the averages `ao5`/`ao12`/`ao100` (verified
+      // against real bytes, July 2026). The proposed `best_ao*_ms` names never
+      // materialised, so read the wire names first and keep the old ones as a
+      // fallback in case the server ever grows the best-of variants.
+      bestAo5Ms: _int(json['ao5']) ?? _int(json['best_ao5_ms']),
+      bestAo12Ms: _int(json['ao12']) ?? _int(json['best_ao12_ms']),
+      bestAo100Ms: _int(json['ao100']) ?? _int(json['best_ao100_ms']),
       progress: <StatsPoint>[
         for (final dynamic p
             in (json['progress'] as List<dynamic>?) ?? <dynamic>[])

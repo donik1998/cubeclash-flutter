@@ -1,0 +1,23 @@
+{
+  "user": {
+    "id": "b4f22257-01f9-4096-b7e5-1a2203c904c5",
+    "display_name": "kian_r",
+    "country": "IR",
+    "elo": 1000
+  },
+  "rank": {
+    "event": "3x3",
+    "metric": "single",
+    "scope": "global",
+    "position": 1
+  },
+  "stats": {
+    "best_single_ms": 6289,
+    "best_single_event": "3x3",
+    "total_solves": 12,
+    "win_rate": null,
+    "wins": 0,
+    "losses": 0
+  },
+  "friend_count": 0
+}
