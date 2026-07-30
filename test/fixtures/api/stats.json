@@ -1,10 +1,82 @@
 {
   "event": "3x3",
-  "best_single_ms": 6289,
-  "ao5": 6862,
-  "ao12": 6830,
+  "best_single_ms": 6800,
+  "ao5": 7033,
+  "ao12": null,
   "ao100": null,
-  "session_average": 6830,
-  "pb_count": 1,
-  "solve_count": 12
+  "session_average": 7033,
+  "pb_count": 2,
+  "solve_count": 5,
+  "progress": [
+    {
+      "day": "2026-07-01",
+      "best_ms": 7000,
+      "average_ms": 7100,
+      "solve_count": 2
+    },
+    {
+      "day": "2026-07-02",
+      "best_ms": 6800,
+      "average_ms": 7100,
+      "solve_count": 2
+    },
+    {
+      "day": "2026-07-03",
+      "best_ms": 6900,
+      "average_ms": 6900,
+      "solve_count": 1
+    }
+  ],
+  "distribution": [
+    {
+      "from_ms": 6800,
+      "to_ms": 6860,
+      "count": 1
+    },
+    {
+      "from_ms": 6860,
+      "to_ms": 6920,
+      "count": 1
+    },
+    {
+      "from_ms": 6920,
+      "to_ms": 6980,
+      "count": 0
+    },
+    {
+      "from_ms": 6980,
+      "to_ms": 7040,
+      "count": 1
+    },
+    {
+      "from_ms": 7040,
+      "to_ms": 7101,
+      "count": 0
+    },
+    {
+      "from_ms": 7101,
+      "to_ms": 7161,
+      "count": 0
+    },
+    {
+      "from_ms": 7161,
+      "to_ms": 7221,
+      "count": 1
+    },
+    {
+      "from_ms": 7221,
+      "to_ms": 7281,
+      "count": 0
+    },
+    {
+      "from_ms": 7281,
+      "to_ms": 7341,
+      "count": 0
+    },
+    {
+      "from_ms": 7341,
+      "to_ms": 7401,
+      "count": 1
+    }
+  ]
 }

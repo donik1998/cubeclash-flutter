@@ -138,8 +138,15 @@ class StatsRepositoryImpl implements StatsRepository {
       avatarUrl: json['avatar_url'] as String?,
       elo: _int(json['elo']),
       bestSingleMs: _int(json['best_single_ms']),
-      bestAo5Ms: _int(json['best_ao5_ms']),
-      bestAo12Ms: _int(json['best_ao12_ms']),
+      // `GET /users/:id` names the averages `ao5` / `ao12`, matching
+      // `GET /stats` — one name per concept across the whole API. Note the
+      // semantics differ by endpoint though: on /stats these are the *current
+      // rolling* averages, here they are the *best ever* posted. The screen
+      // labels them "Best ao5" accordingly.
+      // `best_ao*_ms` stays as a fallback for the shape this client first
+      // proposed, before the server existed to disagree with it.
+      bestAo5Ms: _int(json['ao5']) ?? _int(json['best_ao5_ms']),
+      bestAo12Ms: _int(json['ao12']) ?? _int(json['best_ao12_ms']),
       headToHead: h2h is Map
           ? HeadToHead(
               wins: _int(asJsonMap(h2h)['wins']) ?? 0,

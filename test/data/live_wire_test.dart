@@ -150,22 +150,44 @@ void main() {
       final Result<PlayerStats> result = await repo.getStats();
       final PlayerStats stats = (result as Ok<PlayerStats>).value;
 
-      expect(stats.event, '3x3');
-      expect(stats.bestSingleMs, 6289);
-      expect(stats.bestAo5Ms, 6862, reason: 'wire key is ao5, not best_ao5_ms');
-      expect(stats.bestAo12Ms, 6830, reason: 'wire key is ao12');
-      expect(stats.bestAo100Ms, isNull, reason: 'ao100 is null in the fixture');
-      expect(stats.solveCount, 12);
-      // The server sends no progress/distribution arrays — parsed leniently.
-      expect(stats.progress, isEmpty);
-      expect(stats.distribution, isEmpty);
+      // Assertions are derived FROM the fixture, not hardcoded: these files are
+      // regenerated against a live server, so pinning literals here means every
+      // refresh breaks the suite for no reason. What matters is that the
+      // *wire keys* map onto the right domain fields.
+      expect(stats.event, fixture['event']);
+      expect(stats.bestSingleMs, fixture['best_single_ms']);
+      expect(stats.bestAo5Ms, fixture['ao5'],
+          reason: 'wire key is ao5, not best_ao5_ms — the original bug');
+      expect(stats.bestAo12Ms, fixture['ao12'], reason: 'wire key is ao12');
+      expect(stats.bestAo100Ms, fixture['ao100'], reason: 'wire key is ao100');
+      expect(stats.solveCount, fixture['solve_count']);
+
+      // progress/distribution are now served (added after the first live pass).
+      final List<dynamic> progress = fixture['progress'] as List<dynamic>;
+      final List<dynamic> buckets = fixture['distribution'] as List<dynamic>;
+      expect(stats.progress, hasLength(progress.length));
+      expect(stats.distribution, hasLength(buckets.length));
+      if (stats.progress.isNotEmpty) {
+        expect(stats.progress.first.bestMs,
+            (progress.first as Map<String, dynamic>)['best_ms']);
+        expect(stats.progress.first.solveCount,
+            (progress.first as Map<String, dynamic>)['solve_count']);
+      }
+      for (int i = 0; i < stats.distribution.length - 1; i++) {
+        expect(stats.distribution[i].toMs, stats.distribution[i + 1].fromMs,
+            reason: 'histogram buckets must be contiguous');
+      }
     });
   });
 
   group('stats — users_public.json', () {
     test('getPlayer parses the minimal public user (bests/h2h absent)',
         () async {
-      final Map<String, dynamic> fixture = loadApiFixture('users_public');
+      // Hand-written identity-only shape: what a user with no solves and no
+      // shared races returns, and what the endpoint returned before it was
+      // widened. Proves the parse stays lenient when the fields are absent.
+      final Map<String, dynamic> fixture =
+          loadApiFixture('users_public_minimal');
       final DioClient client =
           await clientServing((_) => jsonResponse(fixture));
       final StatsRepositoryImpl repo = StatsRepositoryImpl(client);
@@ -178,9 +200,33 @@ void main() {
       expect(p.displayName, 'kian_r');
       expect(p.countryCode, 'IR');
       expect(p.elo, 1000);
-      // The live /users/:id returns only identity — no bests, no head-to-head.
       expect(p.bestSingleMs, isNull);
       expect(p.headToHead, isNull);
+    });
+  });
+
+  group('stats — users_public.json (widened)', () {
+    test('getPlayer parses bests and head-to-head from the live shape',
+        () async {
+      final Map<String, dynamic> fixture = loadApiFixture('users_public');
+      final Map<String, dynamic> user =
+          fixture['user'] as Map<String, dynamic>;
+      final DioClient client =
+          await clientServing((_) => jsonResponse(fixture));
+      final StatsRepositoryImpl repo = StatsRepositoryImpl(client);
+
+      final Result<PlayerProfile> result =
+          await repo.getPlayer(user['id'] as String);
+      final PlayerProfile p = (result as Ok<PlayerProfile>).value;
+
+      expect(p.displayName, user['display_name']);
+      // The averages are named ao5/ao12 here too, matching GET /stats.
+      expect(p.bestSingleMs, user['best_single_ms']);
+      expect(p.bestAo5Ms, user['ao5'],
+          reason: 'profile uses ao5, consistent with /stats');
+      expect(p.bestAo12Ms, user['ao12']);
+      // No email may ever appear on a public profile.
+      expect(user.containsKey('email'), isFalse);
     });
   });
 
