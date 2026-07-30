@@ -7,27 +7,55 @@ on:
     branches: [main]
 
 jobs:
-  build:
-    name: Analyze & test
+  # Cheap checks stay on Linux — they are platform-independent and finish in
+  # under a minute.
+  analyze:
+    name: Format & analyze
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: 3.44.2
           channel: stable
-
-      - name: Flutter version
-        run: flutter --version
-
-      - name: Install dependencies
-        run: flutter pub get
-
+      - run: flutter --version
+      - run: flutter pub get
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed .
-
       - name: Analyze
         run: flutter analyze
 
+  # Tests run on macOS, deliberately.
+  #
+  # This suite contains 176 golden files covering every hero screen in light and
+  # dark, and goldens are platform-dependent: font rasterisation differs between
+  # macOS and Linux, so a suite generated on a Mac fails wholesale on an Ubuntu
+  # runner (525 passed / 42 failed, every failure a golden). Splitting the
+  # goldens out with tags was rejected because several files mix golden and
+  # behavioural tests in the same group — tagging at file level would silently
+  # stop running the behavioural ones.
+  #
+  # The Flutter version is pinned rather than tracking `stable` for the same
+  # reason: a framework bump can change rendering and invalidate every golden at
+  # once, which should be a deliberate `--update-goldens` commit, not a surprise
+  # red build.
+  test:
+    name: Test (macOS — goldens are platform-specific)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.2
+          channel: stable
+      - run: flutter --version
+      - run: flutter pub get
       - name: Test
         run: flutter test
+      - name: Upload golden failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-failures
+          path: '**/failures/**'
+          if-no-files-found: ignore
