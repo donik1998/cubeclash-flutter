@@ -14,11 +14,15 @@ import '../../features/auth/data/repositories/fake_auth_repository.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
 import '../../features/auth/presentation/cubit/auth_cubit.dart';
 import '../../features/profile/data/repositories/fake_profile_repository.dart';
+import '../../features/profile/data/repositories/fake_profile_summary_repository.dart';
 import '../../features/profile/data/repositories/profile_repository_impl.dart';
+import '../../features/profile/data/repositories/profile_summary_repository_impl.dart';
 import '../../features/profile/data/repositories/settings_repository_impl.dart';
 import '../../features/profile/domain/repositories/profile_repository.dart';
+import '../../features/profile/domain/repositories/profile_summary_repository.dart';
 import '../../features/profile/presentation/cubit/friends_cubit.dart';
 import '../../features/profile/presentation/cubit/profile_cubit.dart';
+import '../../features/profile/presentation/cubit/profile_summary_cubit.dart';
 import '../../features/profile/presentation/cubit/settings_cubit.dart';
 import '../../features/race/data/fake_race_gateway.dart';
 import '../../features/race/data/repositories/fake_race_lobby_repository.dart';
@@ -230,8 +234,18 @@ Future<void> configureDependencies({
         analytics: sl<AnalyticsService>(),
       ),
     )
+    // The composite read-model behind the "You · Profile" screen — additive,
+    // separate from the thin ProfileRepository above.
+    ..registerLazySingleton<ProfileSummaryRepository>(
+      () => kUseFakeData
+          ? FakeProfileSummaryRepository(readFailureRate: kDemoReadFailureRate)
+          : ProfileSummaryRepositoryImpl(sl<DioClient>()),
+    )
     ..registerFactory<ProfileCubit>(
       () => ProfileCubit(repository: sl<ProfileRepository>()),
+    )
+    ..registerFactory<ProfileSummaryCubit>(
+      () => ProfileSummaryCubit(repository: sl<ProfileSummaryRepository>()),
     )
     ..registerFactory<FriendsCubit>(
       () => FriendsCubit(repository: sl<ProfileRepository>()),

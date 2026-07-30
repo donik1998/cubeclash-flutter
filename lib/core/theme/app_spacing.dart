@@ -43,4 +43,15 @@ class AppRadius {
   /// Between [card] and [xl]. The two cards sit side by side and read as one
   /// unit, so the design rounds them a touch more than a standalone card.
   static const double versusCard = 18;
+
+  /// The You · Profile summary stat tile — 14 (Figma `47:170`).
+  ///
+  /// The three tiles under the hero round a touch tighter than a full [card],
+  /// matching the frame. Same value as [button] but kept separate so the
+  /// exception stays traceable to its design node.
+  static const double statTile = 14;
+
+  /// The leading colored icon tile inside a `ProfileMenuRow` — 8 (Figma
+  /// `47:179`), aliases [sm].
+  static const double iconTile = sm;
 }

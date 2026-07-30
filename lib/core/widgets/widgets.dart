@@ -13,6 +13,7 @@ export 'app_text_field.dart';
 export 'country_flag.dart';
 export 'cube_face_icon.dart';
 export 'leaderboard_row.dart';
+export 'profile_avatar.dart';
 export 'state_views.dart';
 export 'stat_card.dart';
 export 'time_text.dart';

@@ -255,6 +255,25 @@ class AppTypography {
     fontFeatures: _tabularFigures,
   );
 
+  /// Bold 20 — the value on a You · Profile summary tile (Figma `47:171`).
+  ///
+  /// "8.42 / best". Larger than [miniStat]'s companion label but smaller than
+  /// [h2]; the three tiles sit in a row and this is what keeps them legible
+  /// without crowding. Tabular via `.tabular` at the call site, since these are
+  /// numbers (best time, solve count).
+  static const TextStyle statValue = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 20,
+    fontWeight: FontWeight.w700,
+  );
+
+  /// Medium 11 — the label under a You · Profile summary tile (Figma `47:172`).
+  static const TextStyle statLabel = TextStyle(
+    fontFamily: fontFamily,
+    fontSize: 11,
+    fontWeight: FontWeight.w500,
+  );
+
   /// SemiBold 11/16, +8% tracking — section eyebrows (`SCRAMBLE`).
   static const TextStyle overline = TextStyle(
     fontFamily: fontFamily,

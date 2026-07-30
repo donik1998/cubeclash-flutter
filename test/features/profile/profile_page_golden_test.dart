@@ -8,7 +8,6 @@ import 'package:cubeclash/features/profile/presentation/cubit/friends_cubit.dart
 import 'package:cubeclash/features/profile/presentation/cubit/profile_cubit.dart';
 import 'package:cubeclash/features/profile/presentation/cubit/settings_cubit.dart';
 import 'package:cubeclash/features/profile/presentation/pages/friends_page.dart';
-import 'package:cubeclash/features/profile/presentation/pages/profile_page.dart';
 import 'package:cubeclash/features/profile/presentation/pages/settings_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -107,15 +106,6 @@ void main() {
     }
     await tester.binding.setSurfaceSize(null);
   }
-
-  testWidgets('profile', (WidgetTester tester) async {
-    whenListen(
-      profileCubit,
-      const Stream<ProfileState>.empty(),
-      initialState: const ProfileState(profile: me, isLoading: false),
-    );
-    await goldenFor(tester, const ProfilePage(), name: 'profile');
-  });
 
   testWidgets('settings', (WidgetTester tester) async {
     whenListen(

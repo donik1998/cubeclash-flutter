@@ -15,6 +15,7 @@ class AppCard extends StatelessWidget {
     this.onTap,
     this.color,
     this.borderColor,
+    this.borderRadius,
   });
 
   final Widget child;
@@ -25,10 +26,15 @@ class AppCard extends StatelessWidget {
   final Color? color;
   final Color? borderColor;
 
+  /// Corner radius; defaults to [AppRadius.card]. Override for the tighter
+  /// profile stat tile (Figma `47:170`, [AppRadius.statTile]).
+  final double? borderRadius;
+
   @override
   Widget build(BuildContext context) {
     final AppColors colors = context.colors;
-    final BorderRadius radius = BorderRadius.circular(AppRadius.card);
+    final BorderRadius radius =
+        BorderRadius.circular(borderRadius ?? AppRadius.card);
 
     return Material(
       color: color ?? colors.bgSurface,
