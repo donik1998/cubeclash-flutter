@@ -1,7 +1,7 @@
 {
   "tokens": {
-    "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3ODU0Mjg3NzAsImV4cCI6MTc4NTQyOTY3MCwic3ViIjoiYjRmMjIyNTctMDFmOS00MDk2LWI3ZTUtMWEyMjAzYzkwNGM1In0.-SkGCRP2lw9Cvi0yIlZ44uOho9fxXxg20St_abaV8H4",
-    "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3ODU0Mjg3NzAsImV4cCI6MTc4ODAyMDc3MCwic3ViIjoiYjRmMjIyNTctMDFmOS00MDk2LWI3ZTUtMWEyMjAzYzkwNGM1IiwianRpIjoiNzEyN2ZkN2EtZWNjOC00MTkwLWI1ZjctNjA3NjA4YWIzOWUzIn0.zxdHE4hCqt2INvDEdYDyEn3iGUsbq0eHMxAjNCC0hG4",
+    "access": "<access-token-redacted>",
+    "refresh": "<refresh-token-redacted>",
     "expires_in": 900
   }
 }

@@ -8,8 +8,8 @@
     "created_at": "2026-07-30T16:26:10.659Z"
   },
   "tokens": {
-    "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3ODU0Mjg3NzAsImV4cCI6MTc4NTQyOTY3MCwic3ViIjoiODJhMjNmMzctOTY0OC00YWJhLTk0YTItZDUyMDE4YTY5YzNkIn0.ZL5qpA98_bitLAaHaUj-DSSXURyKleTkpLHjrK2JcYs",
-    "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3ODU0Mjg3NzAsImV4cCI6MTc4ODAyMDc3MCwic3ViIjoiODJhMjNmMzctOTY0OC00YWJhLTk0YTItZDUyMDE4YTY5YzNkIiwianRpIjoiMDRmYmUwNGUtY2RhNy00ZjllLWEyOWUtZmZhNTc3YjFiMGJhIn0.U6vkScl4FQ2KDh3ztObunDhhcf3uEouoYIR4l1swBOM",
+    "access": "<access-token-redacted>",
+    "refresh": "<refresh-token-redacted>",
     "expires_in": 900
   }
 }
