@@ -153,6 +153,12 @@ class PlayerProfile extends Equatable {
 }
 
 /// Race record between the signed-in user and another player.
+///
+/// The *absence* of this object (a null `headToHead`) means the two have never
+/// raced. A present record with `wins == 0 && losses == 0` is a different
+/// state: they have raced, but nothing was decided -- the server counts a race
+/// as a win or a loss only when someone actually won, so two mutual DNFs
+/// produce exactly this. Never collapse the two.
 class HeadToHead extends Equatable {
   const HeadToHead({required this.wins, required this.losses});
 
@@ -160,7 +166,11 @@ class HeadToHead extends Equatable {
   final int wins;
   final int losses;
 
-  int get total => wins + losses;
+  /// Races that produced a winner. **Not the number of races played** -- the
+  /// server also tracks `dnf` and `left` outcomes and does not send them, so
+  /// the true played count is not knowable from this payload. Label it as
+  /// decided races, never as races.
+  int get decided => wins + losses;
 
   @override
   List<Object?> get props => <Object?>[wins, losses];

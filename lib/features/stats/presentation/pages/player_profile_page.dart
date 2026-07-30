@@ -8,6 +8,7 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/widgets.dart';
 import '../../domain/entities/leaderboard_entry.dart';
 import '../cubit/player_profile_cubit.dart';
+import '../widgets/head_to_head_card.dart';
 
 /// Player Profile — `/stats/player/:id`, pushed full-screen.
 ///
@@ -151,104 +152,9 @@ class _Body extends StatelessWidget {
           style: AppTypography.overline.copyWith(color: colors.textMuted),
         ),
         const SizedBox(height: AppSpacing.md),
-        _HeadToHeadCard(
+        HeadToHeadCard(
           record: profile.headToHead,
           opponentName: profile.displayName,
-        ),
-      ],
-    );
-  }
-}
-
-class _HeadToHeadCard extends StatelessWidget {
-  const _HeadToHeadCard({required this.record, required this.opponentName});
-
-  final HeadToHead? record;
-  final String opponentName;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppColors colors = context.colors;
-
-    if (record == null || record!.total == 0) {
-      return AppCard(
-        child: Column(
-          children: <Widget>[
-            Text(
-              "You haven't raced $opponentName yet",
-              textAlign: TextAlign.center,
-              style: AppTypography.body.copyWith(color: colors.textSecondary),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final HeadToHead h2h = record!;
-
-    return AppCard(
-      child: Column(
-        children: <Widget>[
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: <Widget>[
-              _Tally(
-                value: h2h.wins,
-                label: 'You',
-                color: colors.statusSuccess,
-              ),
-              Text(
-                '–',
-                style: AppTypography.h2.copyWith(color: colors.textMuted),
-              ),
-              _Tally(
-                value: h2h.losses,
-                label: opponentName,
-                color: colors.statusDanger,
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            '${h2h.total} race${h2h.total == 1 ? '' : 's'}',
-            style: AppTypography.caption.copyWith(color: colors.textMuted),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Tally extends StatelessWidget {
-  const _Tally({
-    required this.value,
-    required this.label,
-    required this.color,
-  });
-
-  final int value;
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: <Widget>[
-        Text(
-          '$value',
-          style: AppTypography.h1.copyWith(color: color).tabular,
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        SizedBox(
-          width: 100,
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style:
-                AppTypography.caption.copyWith(color: context.colors.textMuted),
-          ),
         ),
       ],
     );
