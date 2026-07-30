@@ -209,8 +209,7 @@ void main() {
     test('getPlayer parses bests and head-to-head from the live shape',
         () async {
       final Map<String, dynamic> fixture = loadApiFixture('users_public');
-      final Map<String, dynamic> user =
-          fixture['user'] as Map<String, dynamic>;
+      final Map<String, dynamic> user = fixture['user'] as Map<String, dynamic>;
       final DioClient client =
           await clientServing((_) => jsonResponse(fixture));
       final StatsRepositoryImpl repo = StatsRepositoryImpl(client);
