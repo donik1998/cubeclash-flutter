@@ -50,3 +50,9 @@ IMPLEMENTATION_PROMPT.md
 
 # Golden-test failure artifacts — regenerated on every failed run.
 **/test/**/failures/
+
+# fastlane / bundler
+vendor/bundle/
+.bundle/
+fastlane/report.xml
+fastlane/README.md
